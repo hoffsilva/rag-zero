@@ -1,6 +1,10 @@
-# Python prototype
+# Python
 .venv/
 __pycache__/
 
 # macOS
 .DS_Store
+
+# Secrets (keep the example)
+.env*
+!.env.example

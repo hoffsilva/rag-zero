@@ -6,8 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "index": "bun scripts/build-index.ts"
+    "lint": "eslint"
   },
   "dependencies": {
     "next": "16.4.6",

@@ -1,0 +1,44 @@
+"""Minimal async client for the OpenAI embeddings and chat completions endpoints."""
+
+import os
+
+import httpx
+
+OPENAI_BASE_URL = "https://api.openai.com/v1"
+DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
+
+
+def embedding_model() -> str:
+    return os.environ.get("OPENAI_EMBEDDING_MODEL") or DEFAULT_EMBEDDING_MODEL
+
+
+def _env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise RuntimeError(f"{name} is not set")
+    return value
+
+
+async def _post(path: str, body: dict) -> dict:
+    async with httpx.AsyncClient(base_url=OPENAI_BASE_URL, timeout=30) as client:
+        response = await client.post(
+            path,
+            json=body,
+            headers={"Authorization": f"Bearer {_env('OPENAI_API_KEY')}"},
+        )
+    if response.is_error:
+        raise RuntimeError(f"OpenAI {path} failed ({response.status_code}): {response.text}")
+    return response.json()
+
+
+async def embed(inputs: list[str], model: str) -> list[list[float]]:
+    result = await _post("/embeddings", {"model": model, "input": inputs})
+    return [item["embedding"] for item in sorted(result["data"], key=lambda item: item["index"])]
+
+
+async def chat(messages: list[dict[str, str]], json_schema: dict | None = None) -> str:
+    body: dict = {"model": _env("OPENAI_CHAT_MODEL"), "messages": messages}
+    if json_schema:
+        body["response_format"] = {"type": "json_schema", "json_schema": json_schema}
+    result = await _post("/chat/completions", body)
+    return (result["choices"][0]["message"]["content"] or "").strip()

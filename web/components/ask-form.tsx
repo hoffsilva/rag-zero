@@ -2,7 +2,75 @@
 
 import { useState, type FormEvent } from "react";
 
-import type { RagAnswer } from "@/lib/rag";
+// Response of POST /api/ask, served by the Python API in api/main.py.
+interface SourceDocument {
+  id: string;
+  title: string;
+  file: string;
+  source_urls: string[];
+}
+
+interface Source {
+  id: string;
+  title: string;
+  text: string;
+  document: SourceDocument;
+  score: number;
+  cited: boolean;
+}
+
+interface RagAnswer {
+  answer: string;
+  sources: Source[];
+}
+
+const DOCS_BASE_URL = "https://github.com/hoffsilva/rag-zero/blob/main/api/mondria-rag-docs";
+
+// The section text starts with its own "## ID — Title" heading, already shown as the card title.
+function sectionBody(text: string): string {
+  return text.replace(/^## .*\n+/, "");
+}
+
+function CitedSource({ source }: { source: Source }) {
+  const pageUrl = source.document.source_urls[0];
+  return (
+    <article className="rounded-2xl border border-accent/40 bg-navy-raised/95 p-6">
+      <p className="text-xs font-medium uppercase tracking-[0.18em] text-ink/60">
+        {source.document.id} · {source.document.title}
+      </p>
+      <h3 className="mt-2 font-display text-xl font-bold">
+        <span className="font-mono text-base text-accent">[{source.id}]</span> {source.title}
+      </h3>
+      <p className="mt-3 whitespace-pre-line leading-relaxed text-ink/80">{sectionBody(source.text)}</p>
+      <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold">
+        <a href={`${DOCS_BASE_URL}/${source.document.file}`} target="_blank" rel="noreferrer" className="hover:text-accent">
+          Document complet ↗
+        </a>
+        {pageUrl && (
+          <a href={pageUrl} target="_blank" rel="noreferrer" className="hover:text-accent">
+            Page d’origine ↗
+          </a>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function RetrievedSource({ source }: { source: Source }) {
+  return (
+    <details className="group rounded-2xl border border-ink/10 bg-navy-raised/95 p-6 transition-colors hover:border-ink/25">
+      <summary className="flex cursor-pointer list-none flex-col gap-2">
+        <span className="text-xs font-medium uppercase tracking-[0.18em] text-ink/60">
+          {source.id} · score {source.score.toFixed(3)}
+        </span>
+        <span className="font-display text-lg font-bold">{source.title}</span>
+        <span className="text-sm text-ink/60">{source.document.title}</span>
+        <span className="text-sm font-semibold group-open:hidden">Voir le texte →</span>
+      </summary>
+      <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-ink/75">{sectionBody(source.text)}</p>
+    </details>
+  );
+}
 
 const MAX_QUESTION_LENGTH = 300;
 
@@ -47,6 +115,9 @@ export function AskForm() {
       setStatus("error");
     }
   }
+
+  const cited = result?.sources.filter((source) => source.cited) ?? [];
+  const others = result?.sources.filter((source) => !source.cited) ?? [];
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -102,29 +173,30 @@ export function AskForm() {
             <p className="mt-3 whitespace-pre-line text-lg leading-relaxed">{result.answer}</p>
           </div>
 
-          <div className="flex flex-col gap-4">
-            <div>
-              <Eyebrow>Sources</Eyebrow>
-              <h2 className="mt-2 font-display text-3xl font-bold tracking-tight">Sections récupérées</h2>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {result.sources.map((source) => (
-                <details
-                  key={source.id}
-                  className="group rounded-2xl border border-ink/10 bg-navy-raised/95 p-6 transition-colors hover:border-ink/25"
-                >
-                  <summary className="flex cursor-pointer list-none flex-col gap-2">
-                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-ink/60">
-                      {source.id} · score {source.score.toFixed(3)}
-                    </span>
-                    <span className="font-display text-xl font-bold">{source.title}</span>
-                    <span className="text-sm font-semibold group-open:hidden">Voir le texte →</span>
-                  </summary>
-                  <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-ink/75">{source.text}</p>
-                </details>
+          {cited.length > 0 && (
+            <div className="flex flex-col gap-4">
+              <div>
+                <Eyebrow>Sources</Eyebrow>
+                <h2 className="mt-2 font-display text-3xl font-bold tracking-tight">Documents utilisés</h2>
+              </div>
+              {cited.map((source) => (
+                <CitedSource key={source.id} source={source} />
               ))}
             </div>
-          </div>
+          )}
+
+          {others.length > 0 && (
+            <div className="flex flex-col gap-4">
+              <h2 className="font-display text-xl font-bold tracking-tight">
+                {cited.length > 0 ? "Autres sections récupérées" : "Sections récupérées"}
+              </h2>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {others.map((source) => (
+                  <RetrievedSource key={source.id} source={source} />
+                ))}
+              </div>
+            </div>
+          )}
         </section>
       )}
     </div>
