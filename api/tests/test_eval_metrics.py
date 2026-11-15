@@ -23,7 +23,7 @@ def test_retrieval_metrics_ignores_unanswerable_questions():
     results = [
         question(["MON-01-01"], [("MON-01-01", 0.7), ("MON-02-01", 0.5)]),  # rank 1
         question(["MON-01-02"], [("MON-01-01", 0.6), ("MON-01-02", 0.5)]),  # rank 2
-        question(["MON-03-01"], [("MON-01-03", 0.5), ("MON-02-01", 0.4)]),  # missed, other documents
+        question(["MON-03-01"], [("MON-03-02", 0.5), ("MON-02-01", 0.4)]),  # wrong section, right document
         question([], [("MON-01-04", 0.5)]),  # unanswerable: not counted
     ]
 
@@ -33,7 +33,7 @@ def test_retrieval_metrics_ignores_unanswerable_questions():
     assert metrics["hit_rate_at_1"] == pytest.approx(1 / 3)
     assert metrics["hit_rate_at_k"] == pytest.approx(2 / 3)
     assert metrics["mrr"] == pytest.approx((1 + 1 / 2 + 0) / 3)
-    assert metrics["document_hit_rate_at_k"] == pytest.approx(2 / 3)
+    assert metrics["document_hit_rate_at_k"] == pytest.approx(1.0)  # MON-03-02 belongs to MON-03
 
 
 def test_threshold_counts_false_positives_and_negatives():

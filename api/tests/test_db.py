@@ -1,7 +1,8 @@
 """Integration tests against a real Postgres with pgvector, without calling OpenAI.
 
 Each test runs in its own temporary schema (dropped afterwards), so it never touches the
-chunks table the app uses. Skipped when no database is configured:
+chunks table the app uses. Skipped only when TEST_DATABASE_URL is not set; once it is set,
+connection errors fail the run instead of being reported as skips:
     TEST_DATABASE_URL=postgresql://postgres:<password>@localhost:5433/postgres pytest
 """
 
@@ -21,13 +22,6 @@ MODEL = "test-model"
 DOCUMENT = Document(id="MON-01", title="Entreprise Mondria", file="01.md", source_urls=["https://mondria.com/"])
 
 
-def database_url() -> str | None:
-    from local_env import load_env_file
-
-    load_env_file()
-    return os.environ.get("TEST_DATABASE_URL") or os.environ.get("DATABASE_URL")
-
-
 def unit_vector(axis: int, second_axis: int | None = None) -> list[float]:
     """1 on one axis (optionally 1 on a second one too), normalized to length 1."""
     vector = [0.0] * DIMENSIONS
@@ -44,23 +38,22 @@ def chunk(section_id: str) -> Chunk:
 
 @pytest.fixture
 async def connection():
-    url = database_url()
+    url = os.environ.get("TEST_DATABASE_URL")
     if not url:
-        pytest.skip("no TEST_DATABASE_URL or DATABASE_URL")
-    try:
-        conn = await psycopg.AsyncConnection.connect(url, autocommit=True)
-    except psycopg.OperationalError as error:
-        pytest.skip(f"database not reachable: {error}")
+        pytest.skip("TEST_DATABASE_URL is not set")
 
+    conn = await psycopg.AsyncConnection.connect(url, autocommit=True)
     schema = f"test_{uuid.uuid4().hex[:8]}"
-    await conn.execute(f'CREATE SCHEMA "{schema}"')
-    await conn.execute(f'SET search_path TO "{schema}", public')  # the vector type lives in public
-    await db.ensure_schema(conn)
     try:
+        await conn.execute(f'CREATE SCHEMA "{schema}"')
+        await conn.execute(f'SET search_path TO "{schema}", public')  # the vector type lives in public
+        await db.ensure_schema(conn)
         yield conn
     finally:
-        await conn.execute(f'DROP SCHEMA "{schema}" CASCADE')
-        await conn.close()
+        try:
+            await conn.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+        finally:
+            await conn.close()
 
 
 async def test_indexing_twice_does_not_duplicate_rows(connection):

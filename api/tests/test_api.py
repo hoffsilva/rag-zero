@@ -28,10 +28,19 @@ def test_health():
 
 
 @pytest.mark.parametrize("question", ["", "   ", "x" * 301])
-def test_ask_rejects_empty_or_too_long_questions(question):
+def test_ask_rejects_empty_or_too_long_questions(question, monkeypatch):
+    calls = []
+
+    async def pipeline_must_not_run(question: str):
+        calls.append(question)
+        return ANSWER
+
+    monkeypatch.setattr(main, "answer_question", pipeline_must_not_run)
+
     response = client.post("/api/ask", json={"question": question})
 
     assert response.status_code == 422
+    assert calls == []  # rejected before any embedding or chat call
 
 
 def test_ask_returns_the_answer_and_sources(monkeypatch):

@@ -16,19 +16,37 @@ def source(section_id: str, score: float = 0.5) -> ScoredChunk:
 
 @pytest.fixture
 def model_answers(monkeypatch):
-    """Replaces retrieval and the chat call; the returned function sets the model's answer."""
+    """Replaces retrieval and the chat call. The returned function sets the model's answer
+    and returns a dict that records what the chat call received."""
+    received: dict = {}
 
     async def fake_retrieve(question: str, top_k: int = rag.TOP_K):
         return [source("MON-01-04", 0.6), source("MON-01-02", 0.4), source("MON-02-04", 0.3)]
 
-    def set_answer(answer: str) -> None:
+    def set_answer(answer: str) -> dict:
         async def fake_chat(messages, json_schema=None):
+            received["messages"] = messages
+            received["json_schema"] = json_schema
             return json.dumps({"question_language": "French", "answer": answer})
 
         monkeypatch.setattr(rag, "chat", fake_chat)
+        return received
 
     monkeypatch.setattr(rag, "retrieve", fake_retrieve)
     return set_answer
+
+
+@pytest.mark.anyio
+async def test_generation_receives_the_question_and_the_retrieved_sections(model_answers):
+    received = model_answers("ok")
+
+    await rag.answer_question("Quanto custa o suporte?")
+
+    prompt = "\n".join(message["content"] for message in received["messages"])
+    assert received["messages"][-1] == {"role": "user", "content": "Quanto custa o suporte?"}
+    for section_id in ["MON-01-04", "MON-01-02", "MON-02-04"]:
+        assert f"[{section_id}]" in prompt
+    assert received["json_schema"] is not None  # structured answer that names the language first
 
 
 @pytest.mark.anyio
