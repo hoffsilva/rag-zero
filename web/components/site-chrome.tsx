@@ -14,10 +14,13 @@ export function SiteHeader() {
           <Link href="/" className={NAV_LINK}>
             Démo
           </Link>
+          <Link href="/documents" className={NAV_LINK}>
+            Vos documents
+          </Link>
           <Link href="/evaluation" className={NAV_LINK}>
             Évaluation
           </Link>
-          <a href="https://github.com/hoffsilva/rag-zero" className={NAV_LINK}>
+          <a href="https://github.com/hoffsilva/rag-zero" className={`${NAV_LINK} hidden sm:inline`}>
             Code source
           </a>
         </nav>

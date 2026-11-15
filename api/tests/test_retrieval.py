@@ -92,7 +92,7 @@ async def test_multi_query_searches_the_question_and_each_rewrite(chat_returns, 
         embedded.append(inputs)
         return [[float(i)] for i in range(len(inputs))]
 
-    async def fake_search(connection, embedding, model, top_k):
+    async def fake_search(connection, embedding, model, top_k, collection="mondria"):
         searched.append(embedding)
         return [chunk("MON-01-04")] if embedding == [0.0] else [chunk("MON-01-04"), chunk("MON-01-01")]
 

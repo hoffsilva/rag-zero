@@ -103,17 +103,19 @@ RERANK_SCHEMA = {
 }
 
 
-async def rewrite_question(question: str) -> list[str]:
-    """Asks the LLM for French search queries: the knowledge base is in French, so a Portuguese or
-    English question gets French wording, and an ambiguous one gets several angles."""
+MONDRIA_SUBJECT = "a knowledge base about the company Mondria (IT services, cybersecurity, AI), written in French"
+
+
+async def rewrite_question(question: str, subject: str = MONDRIA_SUBJECT) -> list[str]:
+    """Asks the LLM for search queries in the documents' language: for the Mondria base (French),
+    a Portuguese or English question gets French wording, and an ambiguous one gets several angles."""
     raw = await chat(
         [
             {
                 "role": "system",
                 "content": (
-                    f"Rewrite the user's question as {MULTI_QUERY_VARIANTS} different search queries in French "
-                    "for a knowledge base about the company Mondria (IT services, cybersecurity, AI). "
-                    "Keep the meaning; vary the wording and the angle."
+                    f"Rewrite the user's question as {MULTI_QUERY_VARIANTS} different search queries for {subject}. "
+                    "Write them in the language of the documents. Keep the meaning; vary the wording and the angle."
                 ),
             },
             {"role": "user", "content": question},
@@ -156,35 +158,37 @@ async def run(
     question: str,
     model: str,
     top_k: int,
+    collection: str = db.MONDRIA,
+    subject: str = MONDRIA_SUBJECT,
 ) -> list[ScoredChunk]:
     if strategy == "keyword":
-        return await db.keyword_search(connection, question, model, top_k)
+        return await db.keyword_search(connection, question, model, top_k, collection)
 
     if strategy == "multi_query":
-        variants = await rewrite_question(question)
+        variants = await rewrite_question(question, subject)
         embeddings = await embed([question, *variants], model)  # one batch call
-        rankings = [await db.search(connection, embedding, model, CANDIDATES) for embedding in embeddings]
+        rankings = [await db.search(connection, embedding, model, CANDIDATES, collection) for embedding in embeddings]
         return reciprocal_rank_fusion(rankings, top_k)
 
     [query_embedding] = await embed([question], model)
 
     if strategy == "vector":
-        return await db.search(connection, query_embedding, model, top_k)
+        return await db.search(connection, query_embedding, model, top_k, collection)
 
     if strategy == "rerank":
         # Candidates come from the vector search, not the hybrid one: French full-text search misses
         # Portuguese and English questions, which kept the right section out of the pool (measured
         # in eval/: hybrid candidates capped rerank at 87% hit rate@5).
-        candidates = await db.search(connection, query_embedding, model, RERANK_CANDIDATES)
+        candidates = await db.search(connection, query_embedding, model, RERANK_CANDIDATES, collection)
         return await rerank_with_llm(question, candidates, top_k)
 
     if strategy == "mmr":
-        candidates = await db.search_with_embeddings(connection, query_embedding, model, CANDIDATES)
+        candidates = await db.search_with_embeddings(connection, query_embedding, model, CANDIDATES, collection)
         return maximal_marginal_relevance(query_embedding, candidates, top_k)
 
     rankings = [
-        await db.search(connection, query_embedding, model, CANDIDATES),
-        await db.keyword_search(connection, question, model, CANDIDATES),
+        await db.search(connection, query_embedding, model, CANDIDATES, collection),
+        await db.keyword_search(connection, question, model, CANDIDATES, collection),
     ]
     if strategy == "hybrid":
         return reciprocal_rank_fusion(rankings, top_k)

@@ -34,7 +34,7 @@ function sectionBody(text: string): string {
   return text.replace(/^## .*\n+/, "");
 }
 
-function CitedSource({ source }: { source: Source }) {
+function CitedSource({ source, showLinks }: { source: Source; showLinks: boolean }) {
   const pageUrl = source.document.source_urls[0];
   return (
     <article className="rounded-2xl border border-accent/40 bg-navy-raised/95 p-6">
@@ -45,16 +45,18 @@ function CitedSource({ source }: { source: Source }) {
         <span className="font-mono text-base text-accent">[{source.id}]</span> {source.title}
       </h3>
       <p className="mt-3 whitespace-pre-line leading-relaxed text-ink/80">{sectionBody(source.text)}</p>
-      <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold">
-        <a href={`${DOCS_BASE_URL}/${source.document.file}`} target="_blank" rel="noreferrer" className="hover:text-accent">
-          Document complet ↗
-        </a>
-        {pageUrl && (
-          <a href={pageUrl} target="_blank" rel="noreferrer" className="hover:text-accent">
-            Page d’origine ↗
+      {showLinks && (
+        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold">
+          <a href={`${DOCS_BASE_URL}/${source.document.file}`} target="_blank" rel="noreferrer" className="hover:text-accent">
+            Document complet ↗
           </a>
-        )}
-      </div>
+          {pageUrl && (
+            <a href={pageUrl} target="_blank" rel="noreferrer" className="hover:text-accent">
+              Page d’origine ↗
+            </a>
+          )}
+        </div>
+      )}
     </article>
   );
 }
@@ -77,19 +79,33 @@ function RetrievedSource({ source }: { source: Source }) {
 
 const MAX_QUESTION_LENGTH = 300;
 
-const EXAMPLES = [
+const MONDRIA_EXAMPLES = [
   "Où sont les bureaux de Mondria ?",
   "Quelle est la différence entre services gérés et support à la demande ?",
   "Combien coûtent les services TI ?",
 ];
 
-type Status = "idle" | "loading" | "error";
+type Status = "idle" | "loading" | "error" | "expired";
+
+interface AskFormProps {
+  // "mondria" (the demo knowledge base) or the collection of an uploaded document.
+  collection?: string;
+  examples?: string[];
+  placeholder?: string;
+  // Links to the full Mondria document and its original page; uploads have neither.
+  showSourceLinks?: boolean;
+}
 
 function Eyebrow({ children }: { children: string }) {
   return <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">{children}</p>;
 }
 
-export function AskForm() {
+export function AskForm({
+  collection = "mondria",
+  examples = MONDRIA_EXAMPLES,
+  placeholder = "Posez une question sur Mondria…",
+  showSourceLinks = true,
+}: AskFormProps) {
   const [question, setQuestion] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [result, setResult] = useState<RagAnswer | null>(null);
@@ -108,8 +124,12 @@ export function AskForm() {
       const response = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: trimmed, ...(strategy && { strategy }) }),
+        body: JSON.stringify({ question: trimmed, collection, ...(strategy && { strategy }) }),
       });
+      if (response.status === 404) {
+        setStatus("expired");
+        return;
+      }
       if (!response.ok) {
         throw new Error(`Request failed with ${response.status}`);
       }
@@ -139,7 +159,7 @@ export function AskForm() {
             value={question}
             onChange={(event) => setQuestion(event.target.value)}
             maxLength={MAX_QUESTION_LENGTH}
-            placeholder="Posez une question sur Mondria…"
+            placeholder={placeholder}
             className="flex-1 bg-transparent px-3 py-3 text-base text-ink outline-none placeholder:text-ink/40"
           />
           <button
@@ -168,7 +188,7 @@ export function AskForm() {
         </label>
 
         <div className="flex flex-wrap gap-2">
-          {EXAMPLES.map((example) => (
+          {examples.map((example) => (
             <button
               key={example}
               type="button"
@@ -182,6 +202,7 @@ export function AskForm() {
       </div>
 
       {status === "error" && <p className="text-accent">Une erreur est survenue. Réessayez.</p>}
+      {status === "expired" && <p className="text-accent">Ce document a expiré. Envoyez-le de nouveau.</p>}
 
       {result && (
         <section className="flex flex-col gap-8">
@@ -201,7 +222,7 @@ export function AskForm() {
                 <h2 className="mt-2 font-display text-3xl font-bold tracking-tight">Documents utilisés</h2>
               </div>
               {cited.map((source) => (
-                <CitedSource key={source.id} source={source} />
+                <CitedSource key={source.id} source={source} showLinks={showSourceLinks} />
               ))}
             </div>
           )}

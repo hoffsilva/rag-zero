@@ -32,7 +32,7 @@ def test_health():
 def test_ask_rejects_empty_or_too_long_questions(question, monkeypatch):
     calls = []
 
-    async def pipeline_must_not_run(question: str, strategy=None):
+    async def pipeline_must_not_run(question: str, strategy=None, collection="mondria"):
         calls.append(question)
         return ANSWER
 
@@ -47,7 +47,7 @@ def test_ask_rejects_empty_or_too_long_questions(question, monkeypatch):
 def test_ask_returns_the_answer_and_sources(monkeypatch):
     received = {}
 
-    async def fake_answer(question: str, strategy=None):
+    async def fake_answer(question: str, strategy=None, collection="mondria"):
         received["question"] = question
         received["strategy"] = strategy
         return ANSWER
@@ -63,7 +63,7 @@ def test_ask_returns_the_answer_and_sources(monkeypatch):
 
 
 def test_ask_rejects_an_unknown_strategy(monkeypatch):
-    async def pipeline_must_not_run(question: str, strategy=None):
+    async def pipeline_must_not_run(question: str, strategy=None, collection="mondria"):
         raise AssertionError("pipeline ran")
 
     monkeypatch.setattr(main, "answer_question", pipeline_must_not_run)
@@ -74,7 +74,7 @@ def test_ask_rejects_an_unknown_strategy(monkeypatch):
 
 
 def test_ask_hides_internal_errors(monkeypatch):
-    async def failing_answer(question: str, strategy=None):
+    async def failing_answer(question: str, strategy=None, collection="mondria"):
         raise RuntimeError("OpenAI /embeddings failed (401): secret details")
 
     monkeypatch.setattr(main, "answer_question", failing_answer)

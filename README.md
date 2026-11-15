@@ -9,7 +9,7 @@ You ask a question. The app finds the most relevant sections of the knowledge ba
 The project has two parts:
 
 - **`api/`**: the RAG backend in Python (FastAPI). Chunking, indexing, retrieval, prompt and generation all live here. Chunks and embeddings are stored in Postgres with pgvector.
-- **`web/`**: the Next.js frontend. It only renders the page and calls `POST /api/ask`.
+- **`web/`**: the Next.js frontend: the Mondria demo, a [/documents page](https://rag-zero.vercel.app/documents) where visitors upload their own file, and the evaluation report. It only calls the API.
 - **`api/mcp_server.py`**: an MCP server that exposes the same knowledge base as tools to MCP clients such as Claude Code, remotely at `/api/mcp` or locally over stdio.
 
 Both `api/` and `web/` deploy as one Vercel project through [Vercel Services](https://vercel.com/docs/services): `/api/*` goes to Python, everything else to Next.js.
@@ -39,7 +39,15 @@ flowchart LR
 - **API embeddings instead of a local model.** My first prototype used `intfloat/multilingual-e5-small` locally, but PyTorch doesn't fit in a serverless function. The backend uses OpenAI for embeddings and generation, so the function stays small (FastAPI, httpx, psycopg, pgvector, mcp).
 - **Embedding model from the environment.** `OPENAI_EMBEDDING_MODEL` picks the model. The question has to be embedded with the same model as the index, so each row stores its `embedding_model` and searches filter on it. On its first request the API checks that the table has chunks for the configured model and, if not, indexes the docs with it (one API call for 21 chunks). Other `text-embedding-3` models are asked for 1536 dimensions so the column never changes. Switching models on Vercel is a variable change and a redeploy.
 - **Answer language.** With a French context, the model kept answering Portuguese questions in French. The fix was a structured response that makes the model name the question's language before writing the answer.
-- **Public-demo guardrails.** The API key only exists in the Python service, questions are capped at 300 characters, `top_k` is fixed on the server and answers are capped at 500 tokens (`max_completion_tokens`), so each request has a bounded cost. A model refusal is shown as the answer instead of failing, and internal errors return a generic message. Request rate limiting isn't in the code: on Vercel it's a Firewall rate-limit rule (10 requests per minute per IP) on `/api/ask` and `/api/mcp`, plus a monthly spending cap on the OpenAI account.
+- **Public-demo guardrails.** The API key only exists in the Python service, questions are capped at 300 characters, `top_k` is fixed on the server and answers are capped at 500 tokens (`max_completion_tokens`), so each request has a bounded cost. A model refusal is shown as the answer instead of failing, and internal errors return a generic message. Request rate limiting isn't in the code: on Vercel it's a Firewall rate-limit rule (10 requests per minute per IP) on `/api/ask`, `/api/mcp` and `/api/documents`, plus a monthly spending cap on the OpenAI account.
+
+## Your own documents
+
+The [/documents page](https://rag-zero.vercel.app/documents) runs the same pipeline on a file the visitor uploads (`.md`, `.txt` or `.pdf`, up to 1 MB), while the Mondria demo stays a closed knowledge base.
+
+- **Ingestion** (`api/documents.py`): text extraction (UTF-8, or `pypdf` for PDFs; scanned PDFs without text are rejected), then generic chunking: one chunk per markdown heading, and long sections or texts without headings cut into ~800-character pieces with ~150 characters of overlap, preferring paragraph and sentence boundaries. Chunks get `DOC-01-NN` IDs, so citations work exactly like the Mondria ones. Embeddings go in one batch call, and one structured chat call produces the summary, language and three suggested questions shown on the page.
+- **Isolation.** Each upload gets its own collection, `upload-<128 random bits>`, stored in the same `chunks` table (the primary key is now collection, section ID and model). Only the browser that uploaded the file knows the ID, every search filters on it, and `POST /api/ask` accepts only `mondria` or a well-formed upload ID that exists. Uploads expire after 24 hours; expired rows are deleted on the next upload, so no scheduled job is needed.
+- **Limits**: 1 MB, 100 chunks, three formats, generic errors for internal failures, and the Firewall rate limit. One lesson from testing: with a strict JSON schema, the model's description of a French document intermittently came back with accented letters missing or replaced by NUL characters ("employés" → "employ\u0000s"), which Postgres text columns also reject. The description now uses JSON mode with the fields validated in code, the chat client retries output that contains NUL characters, and extracted text is cleaned before being stored.
 
 ## Retrieval strategies
 
@@ -62,6 +70,7 @@ api/
   main.py                 FastAPI app: POST /api/ask, GET /api/health, /api/mcp
   rag.py                  Chunking, indexing, prompt and generation
   retrieval.py            The six retrieval strategies, RRF and MMR
+  documents.py            Uploads: extraction, generic chunking, summary, expiry
   db.py                   Postgres access: schema, upsert, vector search
   schema.sql              chunks table, vector(1536) column, HNSW index
   openai_client.py        Embeddings and chat calls
@@ -73,6 +82,7 @@ api/
 web/
   app/page.tsx            Demo page
   app/evaluation/page.tsx Evaluation report page
+  app/documents/page.tsx  Upload a document and ask about it
   components/ask-form.tsx Question UI, calls /api/ask
   data/evaluation.json    Saved evaluation results
 vercel.json               Services: /api/* → api, the rest → web
@@ -193,17 +203,18 @@ A threshold only catches off-topic questions (weather 0.31, poutine 0.13). On-to
 ## Tests
 
 ```bash
-cd api && pytest                                          # 39 tests, database tests skipped
-TEST_DATABASE_URL=postgresql://postgres:<password>@localhost:5433/postgres pytest   # all 46
+cd api && pytest                                          # 56 tests, database tests skipped
+TEST_DATABASE_URL=postgresql://postgres:<password>@localhost:5433/postgres pytest   # all 65
 ```
 
-46 tests, under a second. They never call OpenAI: a fixture makes any real API call fail the test, and `.env.local` isn't loaded during the run.
+65 tests, under a second. They never call OpenAI: a fixture makes any real API call fail the test, and `.env.local` isn't loaded during the run.
 
 - **Chunking**: frontmatter parsing, section boundaries (the trailing `Documents associés` and `Sources` don't leak into the last section), and the real knowledge base (21 unique sections, each with its document and source URLs).
 - **RAG pipeline**: with retrieval and the chat call replaced by fakes, the model receives the question and every retrieved section, and cited sections are detected with or without brackets. With the database faked, the first request indexes an empty table, reuses existing chunks, and re-indexes when `OPENAI_EMBEDDING_MODEL` changes (the Vercel redeploy path) under the advisory lock; a failed indexing rolls back, closes the connection and leaves the instance not ready. Citations are matched as whole IDs, and a model refusal becomes the answer.
-- **OpenAI client**: `text-embedding-3` models are asked for 1536 dimensions (the column size), `ada-002` isn't, vectors come back in input order; answers are capped with `max_completion_tokens`, and refusals and truncated answers raise instead of returning unparseable content.
+- **OpenAI client**: `text-embedding-3` models are asked for 1536 dimensions (the column size), `ada-002` isn't, vectors come back in input order; answers are capped with `max_completion_tokens`, refusals and truncated answers raise instead of returning unparseable content, and output with NUL characters is retried.
 - **API** (FastAPI `TestClient`): health check, 422 for empty or too long questions before the pipeline runs, internal errors returned as a generic 500 without leaking details, and the remote MCP endpoint answering `initialize` and `tools/list`.
 - **Evaluation metrics**: hit rate, MRR, document hit rate and the false positive / negative counts on hand-made data.
+- **Uploads**: extraction of Markdown, text and a PDF generated in the test (plus scanned, broken, too large, wrong type and non-UTF-8 files), chunking by headings and by size with overlap, the upload endpoint with fakes (private collection, NUL characters removed), collection isolation and expiry on Postgres, and 404/422 for unknown or malformed collections.
 - **Retrieval strategies**: RRF ranks and scale independence, MMR dropping a near-duplicate, the LLM reranking order (unknown and repeated IDs ignored, unlisted candidates kept), the multi-query flow with fakes, and keyword search on Postgres (French stemming, short words ignored).
 - **MCP tools**: `top_k` clamping and the shape of the search results.
 - **Postgres + pgvector** (integration): idempotent re-indexing, deleted sections removed, models coexisting, migration of the old single-column primary key, and results ordered by cosine distance with exact scores (1.0 and 0.707 on synthetic unit vectors). Each test runs in a temporary schema that is dropped afterwards, even when setup fails. They are skipped only when `TEST_DATABASE_URL` isn't set; with it set, a connection error fails the run instead of passing silently.
