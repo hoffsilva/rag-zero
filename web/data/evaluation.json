@@ -13,12 +13,12 @@
       },
       "threshold": {
         "answerable_top1": {
-          "min": 0.4036,
+          "min": 0.4037,
           "max": 0.7088
         },
         "unanswerable_top1": {
           "min": 0.1317,
-          "max": 0.5287
+          "max": 0.5286
         },
         "rows": [
           {
@@ -61,7 +61,8 @@
       },
       "answers": {
         "chat_model": "gpt-4.1-mini",
-        "error_rate": 0.034482758620689655,
+        "answer_k": 4,
+        "citation_error_rate": 0.034482758620689655,
         "answerable_wrong": 1,
         "unanswerable_answered": 0
       },
@@ -78,15 +79,15 @@
             },
             {
               "id": "MON-01-02",
-              "score": 0.3999
+              "score": 0.4
             },
             {
               "id": "MON-01-01",
-              "score": 0.3523
+              "score": 0.3524
             },
             {
               "id": "MON-02-01",
-              "score": 0.335
+              "score": 0.3351
             },
             {
               "id": "MON-01-03",
@@ -95,10 +96,16 @@
           ],
           "rank": 3,
           "answer": "L'ancien nom de Mondria était GC Brieau [MON-01-01].",
+          "answer_sources": [
+            "MON-01-04",
+            "MON-01-02",
+            "MON-01-01",
+            "MON-02-01"
+          ],
           "cited": [
             "MON-01-01"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Since when has Mondria been working with Canadian SMEs?",
@@ -112,27 +119,33 @@
             },
             {
               "id": "MON-01-04",
-              "score": 0.5287
+              "score": 0.5286
             },
             {
               "id": "MON-01-03",
-              "score": 0.4434
+              "score": 0.4433
             },
             {
               "id": "MON-01-02",
-              "score": 0.442
+              "score": 0.4421
             },
             {
               "id": "MON-04-01",
-              "score": 0.4103
+              "score": 0.4104
             }
           ],
           "rank": 1,
           "answer": "Mondria has been working with Canadian SMEs since 2009 [MON-01-01].",
+          "answer_sources": [
+            "MON-01-01",
+            "MON-01-04",
+            "MON-01-03",
+            "MON-01-02"
+          ],
           "cited": [
             "MON-01-01"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Como a Mondria descreve o seu método de trabalho?",
@@ -142,11 +155,11 @@
           "retrieved": [
             {
               "id": "MON-01-02",
-              "score": 0.477
+              "score": 0.4771
             },
             {
               "id": "MON-01-04",
-              "score": 0.3749
+              "score": 0.3748
             },
             {
               "id": "MON-02-01",
@@ -154,7 +167,7 @@
             },
             {
               "id": "MON-02-03",
-              "score": 0.3251
+              "score": 0.3252
             },
             {
               "id": "MON-04-04",
@@ -162,11 +175,17 @@
             }
           ],
           "rank": 1,
-          "answer": "Mondria descreve seu método de trabalho como um parceiro de inteligência gerida, cujo método consiste em clarificar as necessidades, planejar as prioridades, implementar as soluções e governar sua evolução [MON-01-02].",
+          "answer": "A Mondria descreve seu método de trabalho como parceiro de inteligência gerida, consistindo em clarificar as necessidades, planejar as prioridades, implementar as soluções e governar sua evolução [MON-01-02].",
+          "answer_sources": [
+            "MON-01-02",
+            "MON-01-04",
+            "MON-02-01",
+            "MON-02-03"
+          ],
           "cited": [
             "MON-01-02"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Combien de PME Mondria a-t-elle accompagnées ?",
@@ -176,11 +195,11 @@
           "retrieved": [
             {
               "id": "MON-01-03",
-              "score": 0.5926
+              "score": 0.5925
             },
             {
               "id": "MON-01-01",
-              "score": 0.5638
+              "score": 0.5637
             },
             {
               "id": "MON-01-02",
@@ -188,19 +207,25 @@
             },
             {
               "id": "MON-04-01",
-              "score": 0.4812
+              "score": 0.4811
             },
             {
               "id": "MON-01-04",
-              "score": 0.4439
+              "score": 0.4438
             }
           ],
           "rank": 1,
-          "answer": "Mondria a accompagné plus de 300 PME selon les indicateurs publiés sur leur site [MON-01-03].",
+          "answer": "Mondria indique avoir accompagné plus de 300 PME selon les données publiées sur son site [MON-01-03].",
+          "answer_sources": [
+            "MON-01-03",
+            "MON-01-01",
+            "MON-01-02",
+            "MON-04-01"
+          ],
           "cited": [
             "MON-01-03"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "How many years in a row has Mondria been in the MSP 501 ranking?",
@@ -210,15 +235,15 @@
           "retrieved": [
             {
               "id": "MON-01-03",
-              "score": 0.4829
+              "score": 0.4828
             },
             {
               "id": "MON-01-04",
-              "score": 0.3362
+              "score": 0.3361
             },
             {
               "id": "MON-01-01",
-              "score": 0.3323
+              "score": 0.3322
             },
             {
               "id": "MON-01-02",
@@ -230,11 +255,17 @@
             }
           ],
           "rank": 1,
-          "answer": "Mondria has been in the MSP 501 ranking for six consecutive years according to the published indicators [MON-01-03].",
+          "answer": "Mondria has been ranked in the MSP 501 for six consecutive years according to the published indicators [MON-01-03].",
+          "answer_sources": [
+            "MON-01-03",
+            "MON-01-04",
+            "MON-01-01",
+            "MON-01-02"
+          ],
           "cited": [
             "MON-01-03"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Qual é o telefone da Mondria?",
@@ -244,7 +275,7 @@
           "retrieved": [
             {
               "id": "MON-01-04",
-              "score": 0.5875
+              "score": 0.5873
             },
             {
               "id": "MON-01-02",
@@ -256,19 +287,25 @@
             },
             {
               "id": "MON-01-01",
-              "score": 0.3496
+              "score": 0.3495
             },
             {
               "id": "MON-03-04",
-              "score": 0.3359
+              "score": 0.3355
             }
           ],
           "rank": 1,
           "answer": "O telefone da Mondria é 1-888-400-1205 [MON-01-04].",
+          "answer_sources": [
+            "MON-01-04",
+            "MON-01-02",
+            "MON-02-01",
+            "MON-01-01"
+          ],
           "cited": [
             "MON-01-04"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Where is Mondria's Boisbriand office?",
@@ -278,11 +315,11 @@
           "retrieved": [
             {
               "id": "MON-01-04",
-              "score": 0.678
+              "score": 0.6779
             },
             {
               "id": "MON-01-01",
-              "score": 0.463
+              "score": 0.4631
             },
             {
               "id": "MON-05-01",
@@ -290,19 +327,25 @@
             },
             {
               "id": "MON-01-02",
-              "score": 0.3975
+              "score": 0.3976
             },
             {
               "id": "MON-02-01",
-              "score": 0.3781
+              "score": 0.3782
             }
           ],
           "rank": 1,
           "answer": "Mondria's Boisbriand office is located at 1919, boulevard Lionel-Bertrand, bureau 102, Boisbriand (Québec) [MON-01-04].",
+          "answer_sources": [
+            "MON-01-04",
+            "MON-01-01",
+            "MON-05-01",
+            "MON-01-02"
+          ],
           "cited": [
             "MON-01-04"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Mondria s'occupe-t-elle de la maintenance des postes et des serveurs ?",
@@ -324,19 +367,25 @@
             },
             {
               "id": "MON-05-02",
-              "score": 0.5051
+              "score": 0.505
             },
             {
               "id": "MON-02-04",
-              "score": 0.4817
+              "score": 0.4816
             }
           ],
           "rank": 1,
-          "answer": "Oui, Mondria propose la maintenance et la gestion du parc informatique, incluant les postes et les serveurs, dans le cadre de ses services gérés visant la stabilité et la prévention des incidents [MON-02-01].",
+          "answer": "Oui, Mondria propose la surveillance, la maintenance et la gestion du parc informatique, incluant postes, serveurs et réseau, dans une optique de stabilité et de prévention des incidents [MON-02-01].",
+          "answer_sources": [
+            "MON-02-01",
+            "MON-02-03",
+            "MON-01-02",
+            "MON-05-02"
+          ],
           "cited": [
             "MON-02-01"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Does Mondria manage Teams and SharePoint?",
@@ -347,7 +396,7 @@
           "retrieved": [
             {
               "id": "MON-02-02",
-              "score": 0.4916
+              "score": 0.4915
             },
             {
               "id": "MON-01-02",
@@ -355,7 +404,7 @@
             },
             {
               "id": "MON-04-04",
-              "score": 0.4627
+              "score": 0.4628
             },
             {
               "id": "MON-04-01",
@@ -367,11 +416,17 @@
             }
           ],
           "rank": 1,
-          "answer": "Yes, Mondria manages Teams and SharePoint as part of their Microsoft 365 services which cover the management of identities, access, Exchange, Teams, SharePoint, and OneDrive [MON-02-02].",
+          "answer": "Yes, Mondria manages Teams and SharePoint as part of its Microsoft 365 services, which include identity management, access, Exchange, Teams, SharePoint, and OneDrive [MON-02-02].",
+          "answer_sources": [
+            "MON-02-02",
+            "MON-01-02",
+            "MON-04-04",
+            "MON-04-01"
+          ],
           "cited": [
             "MON-02-02"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Como funciona o suporte técnico da Mondria?",
@@ -393,19 +448,25 @@
             },
             {
               "id": "MON-01-02",
-              "score": 0.4178
+              "score": 0.4179
             },
             {
               "id": "MON-05-02",
-              "score": 0.3931
+              "score": 0.393
             }
           ],
           "rank": 2,
-          "answer": "O suporte técnico da Mondria funciona através de um processo de triagem, escalonamento e acompanhamento. Além disso, a Mondria oferece auditorias e projetos de TI, inventários, gestão de licenças e do ciclo de vida dos equipamentos para suporte abrangente [MON-02-03].",
+          "answer": "O suporte técnico da Mondria utiliza um processo de triagem, escalonamento e acompanhamento. A empresa também oferece auditorias e projetos de TI, inventários, gestão de licenças e ciclo de vida dos equipamentos [MON-02-03].",
+          "answer_sources": [
+            "MON-01-04",
+            "MON-02-03",
+            "MON-02-01",
+            "MON-01-02"
+          ],
           "cited": [
             "MON-02-03"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Les sauvegardes sont-elles testées ?",
@@ -416,7 +477,7 @@
           "retrieved": [
             {
               "id": "MON-03-03",
-              "score": 0.4036
+              "score": 0.4037
             },
             {
               "id": "MON-03-02",
@@ -436,12 +497,18 @@
             }
           ],
           "rank": 1,
-          "answer": "Oui, les sauvegardes sont testées, comme indiqué dans les sections MON-03-03 et MON-02-04.",
+          "answer": "Oui, les sauvegardes sont testées selon les informations fournies dans les sections MON-03-03 et MON-02-04.",
+          "answer_sources": [
+            "MON-03-03",
+            "MON-03-02",
+            "MON-02-04",
+            "MON-04-03"
+          ],
           "cited": [
             "MON-03-03",
             "MON-02-04"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Which security framework does Mondria base its cybersecurity on?",
@@ -451,7 +518,7 @@
           "retrieved": [
             {
               "id": "MON-03-01",
-              "score": 0.4918
+              "score": 0.4917
             },
             {
               "id": "MON-01-02",
@@ -459,23 +526,29 @@
             },
             {
               "id": "MON-01-01",
-              "score": 0.4428
+              "score": 0.4427
             },
             {
               "id": "MON-02-01",
-              "score": 0.4234
+              "score": 0.4233
             },
             {
               "id": "MON-05-03",
-              "score": 0.4141
+              "score": 0.414
             }
           ],
           "rank": 1,
-          "answer": "Mondria bases its cybersecurity approach on the CIS Controls framework, prioritizing measures according to risks. This approach focuses on identities, access, emails, and workstations [MON-03-01].",
+          "answer": "Mondria bases its cybersecurity approach on the CIS Controls framework, prioritizing measures according to risks, focusing on identities, access, emails, and workstations [MON-03-01].",
+          "answer_sources": [
+            "MON-03-01",
+            "MON-01-02",
+            "MON-01-01",
+            "MON-02-01"
+          ],
           "cited": [
             "MON-03-01"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "A Mondria usa autenticação multifator no Microsoft 365?",
@@ -485,19 +558,19 @@
           "retrieved": [
             {
               "id": "MON-03-02",
-              "score": 0.5618
+              "score": 0.5619
             },
             {
               "id": "MON-02-02",
-              "score": 0.5133
+              "score": 0.5132
             },
             {
               "id": "MON-04-01",
-              "score": 0.3973
+              "score": 0.3972
             },
             {
               "id": "MON-04-04",
-              "score": 0.3762
+              "score": 0.3761
             },
             {
               "id": "MON-01-01",
@@ -505,11 +578,17 @@
             }
           ],
           "rank": 1,
-          "answer": "Sim, a Mondria anuncia o uso da autenticação multifator como uma das medidas de proteção no Microsoft 365, juntamente com a gestão de permissões, o endurecimento dos acessos e a segurança dos e-mails. [MON-03-02]",
+          "answer": "Sim, Mondria utiliza autenticação multifator como uma das medidas de proteção para Microsoft 365, conforme anunciado nas medidas de segurança que incluem a autenticação multifator, a gestão de permissões, o endurecimento dos acessos e a segurança dos e-mails [MON-03-02].",
+          "answer_sources": [
+            "MON-03-02",
+            "MON-02-02",
+            "MON-04-01",
+            "MON-04-04"
+          ],
           "cited": [
             "MON-03-02"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Que fait Mondria en cas d'incident de sécurité ?",
@@ -519,11 +598,11 @@
           "retrieved": [
             {
               "id": "MON-02-01",
-              "score": 0.5136
+              "score": 0.5135
             },
             {
               "id": "MON-03-04",
-              "score": 0.478
+              "score": 0.4793
             },
             {
               "id": "MON-03-03",
@@ -531,7 +610,7 @@
             },
             {
               "id": "MON-01-02",
-              "score": 0.4561
+              "score": 0.4562
             },
             {
               "id": "MON-05-03",
@@ -539,11 +618,17 @@
             }
           ],
           "rank": 3,
-          "answer": "En cas d'incident de sécurité, Mondria assure la surveillance des courriels, postes et accès, détecte les menaces, répond aux incidents, applique les correctifs nécessaires, effectue des sauvegardes testées et réalise des scans d’exposition pour gérer la situation efficacement.[MON-03-03]",
+          "answer": "Mondria propose la surveillance des courriels, postes et accès, la détection des menaces, la réponse aux incidents, l'application de correctifs, ainsi que des sauvegardes testées et des scans d’exposition pour gérer les incidents de sécurité [MON-03-03].",
+          "answer_sources": [
+            "MON-02-01",
+            "MON-03-04",
+            "MON-03-03",
+            "MON-01-02"
+          ],
           "cited": [
             "MON-03-03"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Can Mondria help with the documentation insurers ask for?",
@@ -553,19 +638,19 @@
           "retrieved": [
             {
               "id": "MON-03-04",
-              "score": 0.4948
+              "score": 0.4953
             },
             {
               "id": "MON-01-04",
-              "score": 0.383
+              "score": 0.3829
             },
             {
               "id": "MON-04-04",
-              "score": 0.3762
+              "score": 0.3763
             },
             {
               "id": "MON-01-02",
-              "score": 0.3762
+              "score": 0.3763
             },
             {
               "id": "MON-02-01",
@@ -573,11 +658,17 @@
             }
           ],
           "rank": 1,
-          "answer": "Yes, Mondria provides support for the documentation requested by insurers as part of their compliance assistance, including registers, incident management, and risk assessment for personal information. However, they do not guarantee compliance for every client [MON-03-04].",
+          "answer": "Yes, Mondria offers support for the documentation requested by insurers, including registers, incident management, and risk assessments for personal information. However, this does not guarantee compliance for every client [MON-03-04].",
+          "answer_sources": [
+            "MON-03-04",
+            "MON-01-04",
+            "MON-04-04",
+            "MON-01-02"
+          ],
           "cited": [
             "MON-03-04"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Quelles solutions d'IA prêtes à déployer Mondria propose-t-elle ?",
@@ -595,11 +686,11 @@
             },
             {
               "id": "MON-04-04",
-              "score": 0.5122
+              "score": 0.5123
             },
             {
               "id": "MON-02-01",
-              "score": 0.4885
+              "score": 0.4884
             },
             {
               "id": "MON-01-01",
@@ -607,11 +698,17 @@
             }
           ],
           "rank": 1,
-          "answer": "Mondria propose comme solutions d'IA prêtes à déployer notamment Microsoft 365 Copilot et Claude [MON-04-01].",
+          "answer": "Mondria propose comme solutions d'IA prêtes à déployer notamment Microsoft 365 Copilot et Claude, selon la distinction faite entre accompagnement stratégique, solutions prêtes à déployer, et solutions sur mesure [MON-04-01].",
+          "answer_sources": [
+            "MON-04-01",
+            "MON-01-02",
+            "MON-04-04",
+            "MON-02-01"
+          ],
           "cited": [
             "MON-04-01"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "What are the steps of Mondria's AI method?",
@@ -622,7 +719,7 @@
           "retrieved": [
             {
               "id": "MON-01-02",
-              "score": 0.4233
+              "score": 0.4234
             },
             {
               "id": "MON-05-04",
@@ -642,11 +739,17 @@
             }
           ],
           "rank": 2,
-          "answer": "Mondria's AI method comprises four steps: 1) framing the objectives and use cases, 2) designing and deploying the solution, 3) supporting adoption, and 4) monitoring KPIs and continuously evolving the solution [MON-04-02].",
+          "answer": "Mondria's AI method comprises four steps: 1) defining the objectives and use cases, 2) designing and deploying the solution, 3) supporting adoption, and 4) monitoring KPIs and evolving the solution [MON-04-02].",
+          "answer_sources": [
+            "MON-01-02",
+            "MON-05-04",
+            "MON-04-02",
+            "MON-04-01"
+          ],
           "cited": [
             "MON-04-02"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Como a Mondria garante a validação humana nas soluções de IA?",
@@ -657,7 +760,7 @@
           "retrieved": [
             {
               "id": "MON-01-02",
-              "score": 0.4482
+              "score": 0.4483
             },
             {
               "id": "MON-04-01",
@@ -673,16 +776,22 @@
             },
             {
               "id": "MON-04-04",
-              "score": 0.3845
+              "score": 0.3846
             }
           ],
           "rank": 3,
-          "answer": "A Mondria assegura a validação humana nas soluções de IA integrando a validação humana como parte fundamental da sua metodologia, que inclui também a governança, permissões, traçabilidade, segurança e conformidade desde a concepção das soluções [MON-04-03][MON-05-04].",
+          "answer": "A Mondria garante a validação humana nas soluções de IA incorporando a validação humana como parte da governança, que inclui também permissões, traçabilidade, segurança e conformidade desde a concepção. Isso é enfatizado no processo de governança para assegurar controle e qualidade nas soluções implementadas [MON-05-04, MON-04-03].",
+          "answer_sources": [
+            "MON-01-02",
+            "MON-04-01",
+            "MON-05-04",
+            "MON-04-03"
+          ],
           "cited": [
             "MON-05-04",
             "MON-04-03"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Qu'est-ce que Etudia ?",
@@ -692,15 +801,15 @@
           "retrieved": [
             {
               "id": "MON-04-04",
-              "score": 0.5384
+              "score": 0.5385
             },
             {
               "id": "MON-05-04",
-              "score": 0.2452
+              "score": 0.2453
             },
             {
               "id": "MON-04-01",
-              "score": 0.2432
+              "score": 0.2433
             },
             {
               "id": "MON-03-03",
@@ -708,15 +817,19 @@
             },
             {
               "id": "MON-04-02",
-              "score": 0.2348
+              "score": 0.235
             }
           ],
           "rank": 1,
-          "answer": "Etudia est une solution d'intelligence artificielle proposée par Mondria, destinée aux notaires du Québec. Elle est intégrée aux applications Teams, Outlook et Word. Cette solution permet notamment la génération de documents, l'analyse du livre des minutes et la gestion des rappels de rendez-vous. Les données utilisées sont hébergées au Québec et ne servent pas à entraîner un modèle d'IA. Ce service est présenté dans la section MON-04-04.",
-          "cited": [
-            "MON-04-04"
+          "answer": "Etudia est une solution d'intelligence artificielle proposée par Mondria pour les notaires du Québec. Elle est intégrée aux outils Teams, Outlook et Word. Les données utilisées sont hébergées au Québec et ne sont pas utilisées pour entraîner un modèle. Les fonctionnalités incluent la génération de documents, l'analyse du livre des minutes et les rappels de rendez-vous.",
+          "answer_sources": [
+            "MON-04-04",
+            "MON-05-04",
+            "MON-04-01",
+            "MON-03-03"
           ],
-          "answer_correct": true
+          "cited": [],
+          "citation_ok": false
         },
         {
           "question": "Where is Etudia's data hosted?",
@@ -726,7 +839,7 @@
           "retrieved": [
             {
               "id": "MON-04-04",
-              "score": 0.4487
+              "score": 0.4488
             },
             {
               "id": "MON-02-04",
@@ -734,7 +847,7 @@
             },
             {
               "id": "MON-01-04",
-              "score": 0.2387
+              "score": 0.2386
             },
             {
               "id": "MON-01-03",
@@ -746,11 +859,17 @@
             }
           ],
           "rank": 1,
-          "answer": "Etudia's data is hosted in Quebec, as stated on the site [MON-04-04].",
+          "answer": "Etudia's data is hosted in Quebec. The data is not used to train a model according to the information provided [MON-04-04].",
+          "answer_sources": [
+            "MON-04-04",
+            "MON-02-04",
+            "MON-01-04",
+            "MON-01-03"
+          ],
           "cited": [
             "MON-04-04"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Mondria travaille-t-elle avec des OBNL ?",
@@ -764,7 +883,7 @@
             },
             {
               "id": "MON-01-01",
-              "score": 0.5156
+              "score": 0.5155
             },
             {
               "id": "MON-01-04",
@@ -780,11 +899,17 @@
             }
           ],
           "rank": 4,
-          "answer": "Oui, Mondria travaille avec des organismes sans but lucratif (OBNL). Cela fait partie des secteurs visés par l'entreprise, selon la navigation de son site qui inclut notamment les OBNL parmi ses domaines d'intervention [MON-05-01].",
+          "answer": "Oui, Mondria travaille avec des organismes sans but lucratif (OBNL). Cela fait partie des secteurs visés par leurs services, comme indiqué dans la navigation de leur site web. [MON-05-01]",
+          "answer_sources": [
+            "MON-01-02",
+            "MON-01-01",
+            "MON-01-04",
+            "MON-05-01"
+          ],
           "cited": [
             "MON-05-01"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "What's the difference between managed services and on-demand support?",
@@ -802,7 +927,7 @@
             },
             {
               "id": "MON-02-01",
-              "score": 0.3842
+              "score": 0.3843
             },
             {
               "id": "MON-02-04",
@@ -814,9 +939,17 @@
             }
           ],
           "rank": 1,
-          "answer": "On-demand support intervenes after a problem has occurred, whereas managed services aim to prevent problems through continuous supervision and maintenance.",
-          "cited": [],
-          "answer_correct": false
+          "answer": "Managed services aim to prevent problems through continuous monitoring and maintenance, while on-demand support intervenes after a problem occurs [MON-05-02].",
+          "answer_sources": [
+            "MON-05-02",
+            "MON-02-03",
+            "MON-02-01",
+            "MON-02-04"
+          ],
+          "cited": [
+            "MON-05-02"
+          ],
+          "citation_ok": true
         },
         {
           "question": "Por onde começar em cibersegurança, segundo a Mondria?",
@@ -831,7 +964,7 @@
             },
             {
               "id": "MON-03-01",
-              "score": 0.4913
+              "score": 0.4911
             },
             {
               "id": "MON-01-01",
@@ -839,7 +972,7 @@
             },
             {
               "id": "MON-01-02",
-              "score": 0.3678
+              "score": 0.3679
             },
             {
               "id": "MON-03-03",
@@ -847,11 +980,17 @@
             }
           ],
           "rank": 1,
-          "answer": "Segundo a Mondria, para começar em cibersegurança recomenda-se iniciar pelos controles essenciais e uma priorização baseada nos riscos, especialmente focando em identidades, acessos, e-mails e estações de trabalho.[MON-05-03]",
+          "answer": "Segundo a Mondria, para começar em cibersegurança deve-se focar nos controles essenciais e priorizar conforme os riscos, especialmente em identidades, acessos, e-mails e estações de trabalho [MON-05-03].",
+          "answer_sources": [
+            "MON-05-03",
+            "MON-03-01",
+            "MON-01-01",
+            "MON-01-02"
+          ],
           "cited": [
             "MON-05-03"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Qui est le président-directeur général de Mondria ?",
@@ -859,7 +998,7 @@
           "retrieved": [
             {
               "id": "MON-01-04",
-              "score": 0.5287
+              "score": 0.5286
             },
             {
               "id": "MON-01-02",
@@ -875,13 +1014,19 @@
             },
             {
               "id": "MON-01-03",
-              "score": 0.4081
+              "score": 0.408
             }
           ],
           "rank": null,
-          "answer": "L'information sur le président-directeur général de Mondria n'est pas disponible dans le contexte fourni.",
+          "answer": "L'information concernant le président-directeur général de Mondria n'est pas disponible dans le contexte fourni.",
+          "answer_sources": [
+            "MON-01-04",
+            "MON-01-02",
+            "MON-01-01",
+            "MON-02-01"
+          ],
           "cited": [],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "What was Mondria's revenue last year?",
@@ -893,15 +1038,15 @@
             },
             {
               "id": "MON-01-04",
-              "score": 0.4228
+              "score": 0.4227
             },
             {
               "id": "MON-01-02",
-              "score": 0.3597
+              "score": 0.3598
             },
             {
               "id": "MON-02-01",
-              "score": 0.3533
+              "score": 0.3534
             },
             {
               "id": "MON-01-01",
@@ -909,9 +1054,15 @@
             }
           ],
           "rank": null,
-          "answer": "The information about Mondria's revenue last year is not available in the provided context.",
+          "answer": "The revenue of Mondria last year is not available in the provided context.",
+          "answer_sources": [
+            "MON-01-03",
+            "MON-01-04",
+            "MON-01-02",
+            "MON-02-01"
+          ],
           "cited": [],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Quantos funcionários a Mondria tem?",
@@ -923,7 +1074,7 @@
             },
             {
               "id": "MON-01-02",
-              "score": 0.4601
+              "score": 0.4602
             },
             {
               "id": "MON-02-01",
@@ -940,8 +1091,14 @@
           ],
           "rank": null,
           "answer": "A informação sobre o número de funcionários da Mondria não está disponível no contexto fornecido.",
+          "answer_sources": [
+            "MON-01-04",
+            "MON-01-02",
+            "MON-02-01",
+            "MON-01-01"
+          ],
           "cited": [],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Mondria développe-t-elle des applications mobiles iOS ?",
@@ -949,7 +1106,7 @@
           "retrieved": [
             {
               "id": "MON-01-02",
-              "score": 0.4436
+              "score": 0.4435
             },
             {
               "id": "MON-04-01",
@@ -957,7 +1114,7 @@
             },
             {
               "id": "MON-01-04",
-              "score": 0.4284
+              "score": 0.4283
             },
             {
               "id": "MON-02-03",
@@ -970,8 +1127,14 @@
           ],
           "rank": null,
           "answer": "L'information concernant le développement d'applications mobiles iOS par Mondria n'est pas disponible dans le contexte fourni.",
+          "answer_sources": [
+            "MON-01-02",
+            "MON-04-01",
+            "MON-01-04",
+            "MON-02-03"
+          ],
           "cited": [],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "What's the weather like in Sherbrooke in January?",
@@ -979,7 +1142,7 @@
           "retrieved": [
             {
               "id": "MON-01-04",
-              "score": 0.3108
+              "score": 0.3107
             },
             {
               "id": "MON-02-04",
@@ -1000,8 +1163,14 @@
           ],
           "rank": null,
           "answer": "The information about the weather in Sherbrooke in January is not available in the provided context.",
+          "answer_sources": [
+            "MON-01-04",
+            "MON-02-04",
+            "MON-01-01",
+            "MON-04-04"
+          ],
           "cited": [],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Como fazer uma poutine?",
@@ -1021,7 +1190,7 @@
             },
             {
               "id": "MON-04-02",
-              "score": 0.1004
+              "score": 0.1005
             },
             {
               "id": "MON-05-03",
@@ -1029,9 +1198,15 @@
             }
           ],
           "rank": null,
-          "answer": "As informações sobre como fazer uma poutine não estão disponíveis no contexto fornecido.",
+          "answer": "A informação sobre como fazer uma poutine não está disponível no contexto fornecido.",
+          "answer_sources": [
+            "MON-01-04",
+            "MON-01-01",
+            "MON-05-04",
+            "MON-04-02"
+          ],
           "cited": [],
-          "answer_correct": true
+          "citation_ok": true
         }
       ]
     },
@@ -1048,12 +1223,12 @@
       },
       "threshold": {
         "answerable_top1": {
-          "min": 0.3893,
-          "max": 0.7436
+          "min": 0.3889,
+          "max": 0.7437
         },
         "unanswerable_top1": {
-          "min": 0.1511,
-          "max": 0.5668
+          "min": 0.1502,
+          "max": 0.567
         },
         "rows": [
           {
@@ -1096,8 +1271,9 @@
       },
       "answers": {
         "chat_model": "gpt-4.1-mini",
-        "error_rate": 0.13793103448275862,
-        "answerable_wrong": 4,
+        "answer_k": 4,
+        "citation_error_rate": 0.06896551724137931,
+        "answerable_wrong": 2,
         "unanswerable_answered": 0
       },
       "questions": [
@@ -1109,11 +1285,11 @@
           "retrieved": [
             {
               "id": "MON-01-02",
-              "score": 0.4658
+              "score": 0.4665
             },
             {
               "id": "MON-01-01",
-              "score": 0.4634
+              "score": 0.4633
             },
             {
               "id": "MON-01-04",
@@ -1121,7 +1297,7 @@
             },
             {
               "id": "MON-04-01",
-              "score": 0.3301
+              "score": 0.33
             },
             {
               "id": "MON-02-01",
@@ -1130,10 +1306,16 @@
           ],
           "rank": 2,
           "answer": "L'ancien nom de Mondria était GC Brieau [MON-01-01].",
+          "answer_sources": [
+            "MON-01-02",
+            "MON-01-01",
+            "MON-01-04",
+            "MON-04-01"
+          ],
           "cited": [
             "MON-01-01"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Since when has Mondria been working with Canadian SMEs?",
@@ -1143,15 +1325,15 @@
           "retrieved": [
             {
               "id": "MON-01-01",
-              "score": 0.6138
+              "score": 0.6133
             },
             {
               "id": "MON-01-02",
-              "score": 0.5119
+              "score": 0.5113
             },
             {
               "id": "MON-05-01",
-              "score": 0.4833
+              "score": 0.4834
             },
             {
               "id": "MON-01-03",
@@ -1164,10 +1346,16 @@
           ],
           "rank": 1,
           "answer": "Mondria has been working with Canadian SMEs since 2009 [MON-01-01].",
+          "answer_sources": [
+            "MON-01-01",
+            "MON-01-02",
+            "MON-05-01",
+            "MON-01-03"
+          ],
           "cited": [
             "MON-01-01"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Como a Mondria descreve o seu método de trabalho?",
@@ -1177,7 +1365,7 @@
           "retrieved": [
             {
               "id": "MON-01-02",
-              "score": 0.4671
+              "score": 0.468
             },
             {
               "id": "MON-04-01",
@@ -1185,23 +1373,29 @@
             },
             {
               "id": "MON-03-01",
-              "score": 0.3589
+              "score": 0.3588
             },
             {
               "id": "MON-01-01",
-              "score": 0.3481
+              "score": 0.3484
             },
             {
               "id": "MON-04-04",
-              "score": 0.3293
+              "score": 0.3295
             }
           ],
           "rank": 1,
-          "answer": "Mondria descreve seu método de trabalho como uma abordagem que consiste em esclarecer as necessidades, planejar as prioridades, implantar as soluções e governar sua evolução [MON-01-02].",
+          "answer": "A Mondria descreve seu método de trabalho como um parceiro de inteligência gerenciada. Sua abordagem consiste em clarificar as necessidades, planejar as prioridades, implementar as soluções e governar sua evolução [MON-01-02].",
+          "answer_sources": [
+            "MON-01-02",
+            "MON-04-01",
+            "MON-03-01",
+            "MON-01-01"
+          ],
           "cited": [
             "MON-01-02"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Combien de PME Mondria a-t-elle accompagnées ?",
@@ -1215,11 +1409,11 @@
             },
             {
               "id": "MON-01-01",
-              "score": 0.5414
+              "score": 0.5412
             },
             {
               "id": "MON-01-02",
-              "score": 0.5027
+              "score": 0.5025
             },
             {
               "id": "MON-04-01",
@@ -1231,11 +1425,17 @@
             }
           ],
           "rank": 1,
-          "answer": "Mondria a accompagné plus de 300 PME selon les indicateurs publiés sur leur site [MON-01-03].",
+          "answer": "Mondria a accompagné plus de 300 PME canadiennes selon les chiffres publiés sur son site [MON-01-03].",
+          "answer_sources": [
+            "MON-01-03",
+            "MON-01-01",
+            "MON-01-02",
+            "MON-04-01"
+          ],
           "cited": [
             "MON-01-03"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "How many years in a row has Mondria been in the MSP 501 ranking?",
@@ -1249,15 +1449,15 @@
             },
             {
               "id": "MON-01-01",
-              "score": 0.4154
+              "score": 0.415
             },
             {
               "id": "MON-01-02",
-              "score": 0.3856
+              "score": 0.3855
             },
             {
               "id": "MON-01-04",
-              "score": 0.3437
+              "score": 0.3436
             },
             {
               "id": "MON-04-01",
@@ -1265,11 +1465,17 @@
             }
           ],
           "rank": 1,
-          "answer": "Mondria has been in the MSP 501 ranking for six consecutive years according to the published indicators [MON-01-03].",
+          "answer": "Mondria has been in the MSP 501 ranking for six consecutive years [MON-01-03].",
+          "answer_sources": [
+            "MON-01-03",
+            "MON-01-01",
+            "MON-01-02",
+            "MON-01-04"
+          ],
           "cited": [
             "MON-01-03"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Qual é o telefone da Mondria?",
@@ -1279,7 +1485,7 @@
           "retrieved": [
             {
               "id": "MON-01-04",
-              "score": 0.5501
+              "score": 0.55
             },
             {
               "id": "MON-01-02",
@@ -1287,7 +1493,7 @@
             },
             {
               "id": "MON-01-01",
-              "score": 0.4339
+              "score": 0.434
             },
             {
               "id": "MON-02-01",
@@ -1300,10 +1506,16 @@
           ],
           "rank": 1,
           "answer": "O telefone da Mondria é 1-888-400-1205 [MON-01-04].",
+          "answer_sources": [
+            "MON-01-04",
+            "MON-01-02",
+            "MON-01-01",
+            "MON-02-01"
+          ],
           "cited": [
             "MON-01-04"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Where is Mondria's Boisbriand office?",
@@ -1317,11 +1529,11 @@
             },
             {
               "id": "MON-01-01",
-              "score": 0.4857
+              "score": 0.4849
             },
             {
               "id": "MON-01-02",
-              "score": 0.4548
+              "score": 0.4546
             },
             {
               "id": "MON-05-01",
@@ -1329,15 +1541,21 @@
             },
             {
               "id": "MON-04-04",
-              "score": 0.3767
+              "score": 0.3766
             }
           ],
           "rank": 1,
           "answer": "Mondria's Boisbriand office is located at 1919, boulevard Lionel-Bertrand, bureau 102, Boisbriand (Québec) [MON-01-04].",
+          "answer_sources": [
+            "MON-01-04",
+            "MON-01-01",
+            "MON-01-02",
+            "MON-05-01"
+          ],
           "cited": [
             "MON-01-04"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Mondria s'occupe-t-elle de la maintenance des postes et des serveurs ?",
@@ -1351,27 +1569,33 @@
             },
             {
               "id": "MON-01-02",
-              "score": 0.5781
+              "score": 0.578
             },
             {
               "id": "MON-01-01",
-              "score": 0.5648
+              "score": 0.5651
             },
             {
               "id": "MON-02-03",
-              "score": 0.5622
+              "score": 0.5613
             },
             {
               "id": "MON-01-04",
-              "score": 0.5189
+              "score": 0.519
             }
           ],
           "rank": 1,
-          "answer": "Oui, Mondria propose la maintenance ainsi que la surveillance et la gestion du parc informatique, incluant les postes, les serveurs et le réseau, dans une approche visant la stabilité et la prévention des incidents [MON-02-01].",
+          "answer": "Oui, Mondria propose la surveillance, la maintenance et la gestion du parc informatique, incluant postes, serveurs et réseau, dans le cadre de ses services gérés pour assurer la stabilité et prévenir les incidents [MON-02-01].",
+          "answer_sources": [
+            "MON-02-01",
+            "MON-01-02",
+            "MON-01-01",
+            "MON-02-03"
+          ],
           "cited": [
             "MON-02-01"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Does Mondria manage Teams and SharePoint?",
@@ -1382,7 +1606,7 @@
           "retrieved": [
             {
               "id": "MON-01-02",
-              "score": 0.486
+              "score": 0.4859
             },
             {
               "id": "MON-02-02",
@@ -1390,23 +1614,29 @@
             },
             {
               "id": "MON-04-04",
-              "score": 0.4573
+              "score": 0.4576
             },
             {
               "id": "MON-01-01",
-              "score": 0.4536
+              "score": 0.4539
             },
             {
               "id": "MON-04-01",
-              "score": 0.4361
+              "score": 0.436
             }
           ],
           "rank": 2,
-          "answer": "Yes, Mondria manages Teams and SharePoint as part of their Microsoft 365 services, which also include the management of identities, access, Exchange, and OneDrive among others [MON-02-02].",
+          "answer": "Yes, Mondria's services cover the management of Teams and SharePoint among other Microsoft 365 services. This includes identity and access management, Exchange, OneDrive, and governance of permissions and data. [MON-02-02]",
+          "answer_sources": [
+            "MON-01-02",
+            "MON-02-02",
+            "MON-04-04",
+            "MON-01-01"
+          ],
           "cited": [
             "MON-02-02"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Como funciona o suporte técnico da Mondria?",
@@ -1416,7 +1646,7 @@
           "retrieved": [
             {
               "id": "MON-02-03",
-              "score": 0.5318
+              "score": 0.531
             },
             {
               "id": "MON-02-01",
@@ -1424,7 +1654,7 @@
             },
             {
               "id": "MON-01-02",
-              "score": 0.4656
+              "score": 0.4654
             },
             {
               "id": "MON-01-04",
@@ -1432,15 +1662,21 @@
             },
             {
               "id": "MON-01-01",
-              "score": 0.4304
+              "score": 0.4308
             }
           ],
           "rank": 1,
-          "answer": "O suporte técnico da Mondria utiliza um processo de triagem, escalonamento e acompanhamento para atender às demandas. Além disso, a empresa oferece auditorias e projetos de TI, inventários, gestão de licenças e do ciclo de vida dos equipamentos. [MON-02-03]",
+          "answer": "O suporte técnico da Mondria utiliza um processo de triagem, escalonamento e acompanhamento para atender as demandas. Além disso, a empresa oferece auditorias e projetos de TI, inventários, gestão de licenças e ciclo de vida dos equipamentos. [MON-02-03]",
+          "answer_sources": [
+            "MON-02-03",
+            "MON-02-01",
+            "MON-01-02",
+            "MON-01-04"
+          ],
           "cited": [
             "MON-02-03"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Les sauvegardes sont-elles testées ?",
@@ -1451,11 +1687,11 @@
           "retrieved": [
             {
               "id": "MON-02-04",
-              "score": 0.3893
+              "score": 0.3889
             },
             {
               "id": "MON-03-03",
-              "score": 0.3278
+              "score": 0.328
             },
             {
               "id": "MON-05-02",
@@ -1463,7 +1699,7 @@
             },
             {
               "id": "MON-03-04",
-              "score": 0.3078
+              "score": 0.3077
             },
             {
               "id": "MON-04-03",
@@ -1471,12 +1707,18 @@
             }
           ],
           "rank": 1,
-          "answer": "Oui, les sauvegardes sont testées selon les informations fournies dans le contexte [MON-02-04] et [MON-03-03].",
+          "answer": "Oui, les sauvegardes sont testées, comme mentionné dans les sections MON-02-04 et MON-03-03.",
+          "answer_sources": [
+            "MON-02-04",
+            "MON-03-03",
+            "MON-05-02",
+            "MON-03-04"
+          ],
           "cited": [
             "MON-02-04",
             "MON-03-03"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Which security framework does Mondria base its cybersecurity on?",
@@ -1486,19 +1728,19 @@
           "retrieved": [
             {
               "id": "MON-03-01",
-              "score": 0.6109
+              "score": 0.611
             },
             {
               "id": "MON-05-03",
-              "score": 0.5614
+              "score": 0.5615
             },
             {
               "id": "MON-01-01",
-              "score": 0.5169
+              "score": 0.5172
             },
             {
               "id": "MON-01-02",
-              "score": 0.493
+              "score": 0.4935
             },
             {
               "id": "MON-03-04",
@@ -1506,11 +1748,17 @@
             }
           ],
           "rank": 1,
-          "answer": "Mondria bases its cybersecurity approach on the CIS Controls framework, prioritizing measures according to risks, with a focus on identities, access, emails, and endpoints [MON-03-01].",
+          "answer": "Mondria bases its cybersecurity approach on the CIS Controls framework, prioritizing measures according to risks, especially focusing on identities, access, emails, and endpoints [MON-03-01].",
+          "answer_sources": [
+            "MON-03-01",
+            "MON-05-03",
+            "MON-01-01",
+            "MON-01-02"
+          ],
           "cited": [
             "MON-03-01"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "A Mondria usa autenticação multifator no Microsoft 365?",
@@ -1524,7 +1772,7 @@
             },
             {
               "id": "MON-01-01",
-              "score": 0.4806
+              "score": 0.4808
             },
             {
               "id": "MON-03-01",
@@ -1540,11 +1788,17 @@
             }
           ],
           "rank": 1,
-          "answer": "Sim, Mondria utiliza autenticação multifator no Microsoft 365 como uma das medidas de proteção anunciadas, juntamente com a gestão de permissões, o endurecimento dos acessos e a segurança dos emails [MON-03-02].",
+          "answer": "Sim, a Mondria utiliza autenticação multifator no Microsoft 365 como uma das medidas de segurança anunciadas. Isso faz parte da proteção do Microsoft 365 que inclui também a gestão de permissões, o endurecimento dos acessos e a segurança dos e-mails [MON-03-02].",
+          "answer_sources": [
+            "MON-03-02",
+            "MON-01-01",
+            "MON-03-01",
+            "MON-05-03"
+          ],
           "cited": [
             "MON-03-02"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Que fait Mondria en cas d'incident de sécurité ?",
@@ -1558,15 +1812,15 @@
             },
             {
               "id": "MON-01-02",
-              "score": 0.5042
+              "score": 0.5049
             },
             {
               "id": "MON-01-01",
-              "score": 0.4842
+              "score": 0.4846
             },
             {
               "id": "MON-03-01",
-              "score": 0.4825
+              "score": 0.4824
             },
             {
               "id": "MON-02-01",
@@ -1574,11 +1828,17 @@
             }
           ],
           "rank": null,
-          "answer": "Le contexte fourni ne précise pas explicitement ce que Mondria fait en cas d'incident de sécurité. Cependant, Mondria propose un accompagnement sur la gestion des incidents conformément à son offre d'accompagnement sur les registres, la gestion des incidents et l’évaluation des risques pour les renseignements personnels [MON-03-04].",
+          "answer": "Le contexte ne fournit pas d'informations spécifiques sur les actions de Mondria en cas d'incident de sécurité. Cependant, Mondria propose un accompagnement sur la gestion des incidents comme partie de son offre de conformité, mais cela ne garantit pas une conformité complète pour chaque client [MON-03-04].",
+          "answer_sources": [
+            "MON-03-04",
+            "MON-01-02",
+            "MON-01-01",
+            "MON-03-01"
+          ],
           "cited": [
             "MON-03-04"
           ],
-          "answer_correct": false
+          "citation_ok": false
         },
         {
           "question": "Can Mondria help with the documentation insurers ask for?",
@@ -1592,7 +1852,7 @@
             },
             {
               "id": "MON-01-02",
-              "score": 0.4291
+              "score": 0.4289
             },
             {
               "id": "MON-01-04",
@@ -1600,19 +1860,25 @@
             },
             {
               "id": "MON-01-01",
-              "score": 0.4179
+              "score": 0.4181
             },
             {
               "id": "MON-04-04",
-              "score": 0.4109
+              "score": 0.411
             }
           ],
           "rank": 1,
-          "answer": "Yes, Mondria offers assistance with the documentation requested by insurers or auditors as part of their compliance support, although this does not guarantee compliance for every client [MON-03-04].",
+          "answer": "Yes, Mondria offers support with documentation requested by insurers as part of its services related to registers, incident management, and personal data risk assessments. However, it does not guarantee compliance for every client [MON-03-04].",
+          "answer_sources": [
+            "MON-03-04",
+            "MON-01-02",
+            "MON-01-04",
+            "MON-01-01"
+          ],
           "cited": [
             "MON-03-04"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Quelles solutions d'IA prêtes à déployer Mondria propose-t-elle ?",
@@ -1622,11 +1888,11 @@
           "retrieved": [
             {
               "id": "MON-04-01",
-              "score": 0.7436
+              "score": 0.7437
             },
             {
               "id": "MON-01-02",
-              "score": 0.64
+              "score": 0.6398
             },
             {
               "id": "MON-04-04",
@@ -1638,13 +1904,21 @@
             },
             {
               "id": "MON-04-02",
-              "score": 0.5222
+              "score": 0.5221
             }
           ],
           "rank": 1,
-          "answer": "Mondria propose des solutions d'IA prêtes à déployer qui incluent notamment Microsoft 365 Copilot et Claude, selon la distinction faite entre l'accompagnement stratégique, les solutions prêtes à déployer et les solutions sur mesure connectées aux processus, applications et données.",
-          "cited": [],
-          "answer_correct": false
+          "answer": "Mondria propose des solutions d'IA prêtes à déployer notamment Microsoft 365 Copilot et Claude, selon la distinction faite dans leurs offres d'IA entre accompagnement stratégique, solutions prêtes à déployer, et solutions sur mesure connectées aux processus, applications et données [MON-04-01].",
+          "answer_sources": [
+            "MON-04-01",
+            "MON-01-02",
+            "MON-04-04",
+            "MON-01-01"
+          ],
+          "cited": [
+            "MON-04-01"
+          ],
+          "citation_ok": true
         },
         {
           "question": "What are the steps of Mondria's AI method?",
@@ -1655,15 +1929,15 @@
           "retrieved": [
             {
               "id": "MON-01-02",
-              "score": 0.4685
+              "score": 0.4689
             },
             {
               "id": "MON-05-04",
-              "score": 0.4481
+              "score": 0.4465
             },
             {
               "id": "MON-04-02",
-              "score": 0.4396
+              "score": 0.4395
             },
             {
               "id": "MON-04-01",
@@ -1675,11 +1949,17 @@
             }
           ],
           "rank": 2,
-          "answer": "Mondria's AI method includes four steps: 1) framing the objectives and use cases, 2) designing and deploying the solution, 3) supporting adoption, and 4) monitoring KPIs and evolving the solution [MON-04-02].",
+          "answer": "Mondria's AI method consists of four steps: 1) framing the objectives and use cases, 2) designing and deploying the solution, 3) supporting adoption, and 4) monitoring KPI and evolving the solution [MON-04-02].",
+          "answer_sources": [
+            "MON-01-02",
+            "MON-05-04",
+            "MON-04-02",
+            "MON-04-01"
+          ],
           "cited": [
             "MON-04-02"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Como a Mondria garante a validação humana nas soluções de IA?",
@@ -1694,25 +1974,31 @@
             },
             {
               "id": "MON-01-01",
-              "score": 0.4717
+              "score": 0.4716
             },
             {
               "id": "MON-01-02",
-              "score": 0.4697
+              "score": 0.4693
             },
             {
               "id": "MON-04-04",
-              "score": 0.4424
+              "score": 0.4423
             },
             {
               "id": "MON-05-04",
-              "score": 0.4238
+              "score": 0.4222
             }
           ],
           "rank": 5,
-          "answer": "A informação sobre como a Mondria garante a validação humana nas soluções de IA não está disponível no contexto fornecido.",
+          "answer": "As informações sobre como a Mondria garante a validação humana nas soluções de IA não estão disponíveis no contexto fornecido.",
+          "answer_sources": [
+            "MON-04-01",
+            "MON-01-01",
+            "MON-01-02",
+            "MON-04-04"
+          ],
           "cited": [],
-          "answer_correct": false
+          "citation_ok": false
         },
         {
           "question": "Qu'est-ce que Etudia ?",
@@ -1722,7 +2008,7 @@
           "retrieved": [
             {
               "id": "MON-04-04",
-              "score": 0.5631
+              "score": 0.5632
             },
             {
               "id": "MON-04-01",
@@ -1730,23 +2016,29 @@
             },
             {
               "id": "MON-05-04",
-              "score": 0.2676
+              "score": 0.2654
             },
             {
               "id": "MON-01-01",
-              "score": 0.2635
+              "score": 0.2641
             },
             {
               "id": "MON-01-02",
-              "score": 0.2574
+              "score": 0.257
             }
           ],
           "rank": 1,
-          "answer": "Etudia est une solution d'intelligence artificielle proposée par Mondria, destinée aux notaires du Québec. Elle est intégrée aux applications Teams, Outlook et Word. Cette solution permet notamment la génération de documents, l'analyse du livre des minutes ainsi que les rappels de rendez-vous. Les données utilisées sont hébergées au Québec et ne servent pas à entraîner un modèle IA. [MON-04-04]",
+          "answer": "Etudia est une solution d'intelligence artificielle proposée par Mondria, destinée aux notaires du Québec. Elle est intégrée aux applications Teams, Outlook et Word. Les données utilisées par Etudia sont hébergées au Québec et ne servent pas à entraîner un modèle. Les fonctionnalités annoncées incluent la génération de documents, l’analyse du livre des minutes et les rappels de rendez-vous [MON-04-04].",
+          "answer_sources": [
+            "MON-04-04",
+            "MON-04-01",
+            "MON-05-04",
+            "MON-01-01"
+          ],
           "cited": [
             "MON-04-04"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Where is Etudia's data hosted?",
@@ -1756,11 +2048,11 @@
           "retrieved": [
             {
               "id": "MON-04-04",
-              "score": 0.5354
+              "score": 0.535
             },
             {
               "id": "MON-02-04",
-              "score": 0.2376
+              "score": 0.2378
             },
             {
               "id": "MON-01-04",
@@ -1768,19 +2060,25 @@
             },
             {
               "id": "MON-04-01",
-              "score": 0.2172
+              "score": 0.2171
             },
             {
               "id": "MON-01-01",
-              "score": 0.1942
+              "score": 0.1946
             }
           ],
           "rank": 1,
-          "answer": "Etudia's data is hosted in Quebec, according to the provided context [MON-04-04].",
+          "answer": "Etudia's data is hosted in Quebec according to the context provided [MON-04-04].",
+          "answer_sources": [
+            "MON-04-04",
+            "MON-02-04",
+            "MON-01-04",
+            "MON-04-01"
+          ],
           "cited": [
             "MON-04-04"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Mondria travaille-t-elle avec des OBNL ?",
@@ -1790,11 +2088,11 @@
           "retrieved": [
             {
               "id": "MON-01-01",
-              "score": 0.6064
+              "score": 0.6063
             },
             {
               "id": "MON-01-02",
-              "score": 0.5777
+              "score": 0.5779
             },
             {
               "id": "MON-05-01",
@@ -1802,7 +2100,7 @@
             },
             {
               "id": "MON-01-04",
-              "score": 0.5475
+              "score": 0.5476
             },
             {
               "id": "MON-03-04",
@@ -1810,11 +2108,17 @@
             }
           ],
           "rank": 3,
-          "answer": "Oui, Mondria travaille avec des organismes sans but lucratif (OBNL) comme l'indique la section des secteurs visés de leur site web [MON-05-01].",
+          "answer": "Oui, Mondria travaille avec des organismes sans but lucratif (OBNL) comme l'indique la section sur les secteurs visés de leur site web [MON-05-01].",
+          "answer_sources": [
+            "MON-01-01",
+            "MON-01-02",
+            "MON-05-01",
+            "MON-01-04"
+          ],
           "cited": [
             "MON-05-01"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "What's the difference between managed services and on-demand support?",
@@ -1828,11 +2132,11 @@
             },
             {
               "id": "MON-02-01",
-              "score": 0.3746
+              "score": 0.3747
             },
             {
               "id": "MON-02-03",
-              "score": 0.3424
+              "score": 0.3409
             },
             {
               "id": "MON-02-04",
@@ -1844,9 +2148,18 @@
             }
           ],
           "rank": 1,
-          "answer": "On-demand support intervenes after a problem has occurred, while managed services aim to prevent problems through continuous supervision and maintenance.",
-          "cited": [],
-          "answer_correct": false
+          "answer": "Managed services involve continuous supervision and maintenance to prevent problems, aiming for stability and incident prevention. On-demand support intervenes only after a problem occurs. In other words, managed services are proactive, while on-demand support is reactive [MON-05-02], [MON-02-01].",
+          "answer_sources": [
+            "MON-05-02",
+            "MON-02-01",
+            "MON-02-03",
+            "MON-02-04"
+          ],
+          "cited": [
+            "MON-05-02",
+            "MON-02-01"
+          ],
+          "citation_ok": true
         },
         {
           "question": "Por onde começar em cibersegurança, segundo a Mondria?",
@@ -1857,32 +2170,38 @@
           "retrieved": [
             {
               "id": "MON-05-03",
-              "score": 0.7102
+              "score": 0.7104
             },
             {
               "id": "MON-03-01",
-              "score": 0.591
+              "score": 0.5911
             },
             {
               "id": "MON-01-01",
-              "score": 0.4823
+              "score": 0.4827
             },
             {
               "id": "MON-01-02",
               "score": 0.4372
             },
             {
-              "id": "MON-05-04",
-              "score": 0.3974
+              "id": "MON-04-01",
+              "score": 0.3972
             }
           ],
           "rank": 1,
-          "answer": "Segundo a Mondria, é recomendado começar pelos controles essenciais e uma priorização baseada nos riscos, focando nas identidades, nos acessos, nos e-mails e nas estações de trabalho. Essa abordagem visa garantir uma proteção eficaz desde os pontos mais críticos [MON-05-03][MON-03-01].",
+          "answer": "Segundo a Mondria, recomenda-se começar pelos controles essenciais com uma priorização baseada nos riscos, focando especialmente nas identidades, acessos, e-mails e estações de trabalho.[MON-05-03][MON-03-01]",
+          "answer_sources": [
+            "MON-05-03",
+            "MON-03-01",
+            "MON-01-01",
+            "MON-01-02"
+          ],
           "cited": [
             "MON-05-03",
             "MON-03-01"
           ],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Qui est le président-directeur général de Mondria ?",
@@ -1890,19 +2209,19 @@
           "retrieved": [
             {
               "id": "MON-01-02",
-              "score": 0.556
+              "score": 0.5556
             },
             {
               "id": "MON-01-01",
-              "score": 0.5424
+              "score": 0.5426
             },
             {
               "id": "MON-01-04",
-              "score": 0.4898
+              "score": 0.4899
             },
             {
               "id": "MON-05-01",
-              "score": 0.4107
+              "score": 0.4108
             },
             {
               "id": "MON-04-01",
@@ -1910,9 +2229,15 @@
             }
           ],
           "rank": null,
-          "answer": "Cette information n'est pas disponible dans le contexte fourni.",
+          "answer": "L'information concernant le président-directeur général de Mondria n'est pas disponible dans le contexte fourni.",
+          "answer_sources": [
+            "MON-01-02",
+            "MON-01-01",
+            "MON-01-04",
+            "MON-05-01"
+          ],
           "cited": [],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "What was Mondria's revenue last year?",
@@ -1920,29 +2245,35 @@
           "retrieved": [
             {
               "id": "MON-01-03",
-              "score": 0.4378
+              "score": 0.4381
             },
             {
               "id": "MON-01-04",
-              "score": 0.4192
+              "score": 0.4191
             },
             {
               "id": "MON-01-01",
-              "score": 0.4115
+              "score": 0.4112
             },
             {
               "id": "MON-01-02",
-              "score": 0.3962
+              "score": 0.3955
             },
             {
               "id": "MON-05-01",
-              "score": 0.3398
+              "score": 0.3396
             }
           ],
           "rank": null,
           "answer": "The information about Mondria's revenue last year is not available in the provided context.",
+          "answer_sources": [
+            "MON-01-03",
+            "MON-01-04",
+            "MON-01-01",
+            "MON-01-02"
+          ],
           "cited": [],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Quantos funcionários a Mondria tem?",
@@ -1950,15 +2281,15 @@
           "retrieved": [
             {
               "id": "MON-01-01",
-              "score": 0.4945
+              "score": 0.4944
             },
             {
               "id": "MON-01-02",
-              "score": 0.4718
+              "score": 0.472
             },
             {
               "id": "MON-01-04",
-              "score": 0.4593
+              "score": 0.4592
             },
             {
               "id": "MON-01-03",
@@ -1971,8 +2302,14 @@
           ],
           "rank": null,
           "answer": "A informação sobre o número de funcionários da Mondria não está disponível no contexto fornecido.",
+          "answer_sources": [
+            "MON-01-01",
+            "MON-01-02",
+            "MON-01-04",
+            "MON-01-03"
+          ],
           "cited": [],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Mondria développe-t-elle des applications mobiles iOS ?",
@@ -1980,29 +2317,35 @@
           "retrieved": [
             {
               "id": "MON-01-01",
-              "score": 0.5668
+              "score": 0.567
             },
             {
               "id": "MON-01-02",
-              "score": 0.5581
+              "score": 0.5585
             },
             {
               "id": "MON-04-01",
-              "score": 0.5311
+              "score": 0.531
             },
             {
               "id": "MON-01-04",
-              "score": 0.496
+              "score": 0.4961
             },
             {
               "id": "MON-04-04",
-              "score": 0.4757
+              "score": 0.4759
             }
           ],
           "rank": null,
-          "answer": "L'information sur le développement d'applications mobiles iOS par Mondria n'est pas disponible dans le contexte fourni.",
+          "answer": "Cette information n'est pas disponible dans le contexte fourni.",
+          "answer_sources": [
+            "MON-01-01",
+            "MON-01-02",
+            "MON-04-01",
+            "MON-01-04"
+          ],
           "cited": [],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "What's the weather like in Sherbrooke in January?",
@@ -2010,7 +2353,7 @@
           "retrieved": [
             {
               "id": "MON-01-04",
-              "score": 0.2478
+              "score": 0.2479
             },
             {
               "id": "MON-05-01",
@@ -2018,21 +2361,27 @@
             },
             {
               "id": "MON-01-01",
-              "score": 0.1506
-            },
-            {
-              "id": "MON-04-04",
-              "score": 0.1472
+              "score": 0.1507
             },
             {
               "id": "MON-03-03",
+              "score": 0.1471
+            },
+            {
+              "id": "MON-04-04",
               "score": 0.147
             }
           ],
           "rank": null,
           "answer": "The information about the weather in Sherbrooke in January is not available in the provided context.",
+          "answer_sources": [
+            "MON-01-04",
+            "MON-05-01",
+            "MON-01-01",
+            "MON-03-03"
+          ],
           "cited": [],
-          "answer_correct": true
+          "citation_ok": true
         },
         {
           "question": "Como fazer uma poutine?",
@@ -2040,7 +2389,7 @@
           "retrieved": [
             {
               "id": "MON-05-04",
-              "score": 0.1511
+              "score": 0.1502
             },
             {
               "id": "MON-04-02",
@@ -2048,21 +2397,27 @@
             },
             {
               "id": "MON-05-03",
-              "score": 0.129
+              "score": 0.1291
             },
             {
               "id": "MON-01-01",
-              "score": 0.1102
+              "score": 0.1101
             },
             {
               "id": "MON-01-04",
-              "score": 0.0977
+              "score": 0.0978
             }
           ],
           "rank": null,
-          "answer": "L'information sur la façon de faire une poutine n'est pas disponible dans le contexte fourni.",
+          "answer": "A informação sobre como fazer uma poutine não está disponível no contexto fornecido.",
+          "answer_sources": [
+            "MON-05-04",
+            "MON-04-02",
+            "MON-05-03",
+            "MON-01-01"
+          ],
           "cited": [],
-          "answer_correct": true
+          "citation_ok": true
         }
       ]
     }

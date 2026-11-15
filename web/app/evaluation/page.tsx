@@ -19,8 +19,9 @@ interface QuestionResult {
   retrieved: Retrieved[];
   rank: number | null;
   answer?: string;
+  answer_sources?: string[];
   cited?: string[];
-  answer_correct?: boolean;
+  citation_ok?: boolean;
 }
 
 interface ThresholdRow {
@@ -49,7 +50,8 @@ interface Run {
   };
   answers: {
     chat_model: string;
-    error_rate: number;
+    answer_k: number;
+    citation_error_rate: number;
     answerable_wrong: number;
     unanswerable_answered: number;
   } | null;
@@ -137,9 +139,9 @@ function QuestionRow({ q, k }: { q: QuestionResult; k: number }) {
         <span className="font-medium">{q.question}</span>
         <span className="flex shrink-0 gap-3 text-sm">
           <span className={q.rank === 1 || !answerable ? "text-ink/60" : "text-accent"}>{retrievalLabel}</span>
-          {q.answer_correct !== undefined && (
-            <span className={q.answer_correct ? "text-ink/60" : "text-accent"}>
-              {q.answer_correct ? "réponse ✓" : "réponse ✗"}
+          {q.citation_ok !== undefined && (
+            <span className={q.citation_ok ? "text-ink/60" : "text-accent"}>
+              {q.citation_ok ? "citation ✓" : "citation ✗"}
             </span>
           )}
         </span>
@@ -153,6 +155,12 @@ function QuestionRow({ q, k }: { q: QuestionResult; k: number }) {
           <span className="text-ink/50">Récupéré : </span>
           {q.retrieved.map((r) => `${r.id} (${r.score.toFixed(3)})`).join(" · ")}
         </p>
+        {q.answer_sources && (
+          <p>
+            <span className="text-ink/50">Envoyé au LLM : </span>
+            {q.answer_sources.join(", ")}
+          </p>
+        )}
         {q.answer && (
           <p className="whitespace-pre-line">
             <span className="text-ink/50">Réponse : </span>
@@ -211,9 +219,9 @@ export default function EvaluationPage() {
             <Metric label="MRR" value={run.retrieval.mrr.toFixed(3)} hint="Moyenne de 1 / rang de la bonne section" />
             {answers && (
               <Metric
-                label="Erreur des réponses"
-                value={percent(answers.error_rate)}
-                hint={`Citation attendue ou refus, ${answers.chat_model}`}
+                label="Erreur de citation"
+                value={percent(answers.citation_error_rate)}
+                hint={`Cite une section attendue, ou rien si la réponse n’est pas dans la base (${answers.chat_model}, ${answers.answer_k} sections). Ne vérifie pas l’exactitude des faits.`}
               />
             )}
           </div>
@@ -233,7 +241,7 @@ export default function EvaluationPage() {
                     <th className="px-4 py-3 font-medium">Hit rate@1</th>
                     <th className="px-4 py-3 font-medium">Hit rate@k</th>
                     <th className="px-4 py-3 font-medium">MRR</th>
-                    <th className="px-4 py-3 font-medium">Erreur des réponses</th>
+                    <th className="px-4 py-3 font-medium">Erreur de citation</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -246,7 +254,7 @@ export default function EvaluationPage() {
                       <td className="px-4 py-3">{percent(r.retrieval.hit_rate_at_1)}</td>
                       <td className="px-4 py-3">{percent(r.retrieval.hit_rate_at_k)}</td>
                       <td className="px-4 py-3">{r.retrieval.mrr.toFixed(3)}</td>
-                      <td className="px-4 py-3">{r.answers ? percent(r.answers.error_rate) : "—"}</td>
+                      <td className="px-4 py-3">{r.answers ? percent(r.answers.citation_error_rate) : "—"}</td>
                     </tr>
                   ))}
                 </tbody>

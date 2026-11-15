@@ -9,9 +9,12 @@ Retrieval (always):
       false positive = unanswerable question above the threshold (the LLM gets unrelated context)
       false negative = answerable question below the threshold (it would be refused)
 
-Answers (--answers, one chat call per question):
-  - answerable question: correct when the answer cites an expected section
-  - unanswerable question: correct when the answer cites nothing (it says it doesn't know)
+Answers (--answers, one chat call per question) — citation compliance, not factual accuracy:
+  - answerable question: compliant when the answer cites an expected section
+  - unanswerable question: compliant when the answer cites nothing (it says it doesn't know)
+  It does not check that the cited text supports the answer: a wrong answer that cites an
+  expected section passes, and so does an invented answer without citations.
+  Generation uses the app's own retrieval (rag.TOP_K sections), saved as answer_sources.
 
 --save writes the results into web/data/evaluation.json under the embedding model's name,
 which the /evaluation page of the web app renders.
@@ -59,8 +62,9 @@ class QuestionResult(TypedDict, total=False):
     retrieved: list[Retrieved]
     rank: int | None
     answer: str
+    answer_sources: list[str]
     cited: list[str]
-    answer_correct: bool
+    citation_ok: bool
 
 
 def document_of(section_id: str) -> str:
@@ -136,14 +140,16 @@ async def evaluate_answers(results: list[QuestionResult]) -> dict:
         answer = await rag.answer_question(result["question"])
         cited = [source["id"] for source in answer["sources"] if source["cited"]]
         result["answer"] = answer["answer"]
+        result["answer_sources"] = [source["id"] for source in answer["sources"]]
         result["cited"] = cited
-        result["answer_correct"] = (
+        result["citation_ok"] = (
             bool(set(cited) & set(result["expected"])) if result["expected"] else not cited
         )
-    wrong = [r for r in results if not r["answer_correct"]]
+    wrong = [r for r in results if not r["citation_ok"]]
     return {
         "chat_model": chat_model(),
-        "error_rate": len(wrong) / len(results),
+        "answer_k": rag.TOP_K,
+        "citation_error_rate": len(wrong) / len(results),
         "answerable_wrong": sum(1 for r in wrong if r["expected"]),
         "unanswerable_answered": sum(1 for r in wrong if not r["expected"]),
     }
@@ -177,12 +183,12 @@ def print_report(report: dict) -> None:
     if answers:
         total = len(report["questions"])
         wrong = answers["answerable_wrong"] + answers["unanswerable_answered"]
-        print(f"\n## Answers ({answers['chat_model']})")
-        print(f"error rate:                {answers['error_rate']:.0%} ({wrong}/{total})")
+        print(f"\n## Answer citations ({answers['chat_model']}, generated from the top {answers['answer_k']})")
+        print(f"citation error rate:       {answers['citation_error_rate']:.0%} ({wrong}/{total})")
         print(f"answerable, wrong/no cite: {answers['answerable_wrong']}")
         print(f"unanswerable, answered:    {answers['unanswerable_answered']}")
         for q in report["questions"]:
-            if not q["answer_correct"]:
+            if not q["citation_ok"]:
                 print(f"  - {q['question']}\n    expected {q['expected'] or 'no citation'}; cited {q['cited'] or 'nothing'}\n    {q['answer']}")
 
 

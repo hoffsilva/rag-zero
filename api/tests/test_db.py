@@ -75,13 +75,40 @@ async def test_reindexing_removes_sections_deleted_from_the_docs(connection):
     assert [r["id"] for r in results] == ["MON-01-01"]
 
 
-async def test_switching_model_replaces_the_old_embeddings(connection):
-    await db.replace_chunks(connection, [chunk("MON-01-01")], [unit_vector(0)], "old-model")
+async def test_models_coexist_so_indexing_one_keeps_the_other(connection):
+    await db.replace_chunks(connection, [chunk("MON-01-01")], [unit_vector(0)], "small")
 
-    await db.replace_chunks(connection, [chunk("MON-01-01")], [unit_vector(0)], MODEL)
+    await db.replace_chunks(connection, [chunk("MON-01-01")], [unit_vector(1)], "large")
 
-    assert await db.count_chunks(connection, "old-model") == 0
-    assert await db.count_chunks(connection, MODEL) == 1
+    assert await db.count_chunks(connection, "small") == 1
+    assert await db.count_chunks(connection, "large") == 1
+    small = await db.search(connection, unit_vector(0), "small", top_k=1)
+    assert small[0]["score"] == pytest.approx(1.0)  # the small vectors were not overwritten
+
+
+async def test_migrates_a_table_keyed_by_section_id_alone(connection):
+    await connection.execute("DROP TABLE chunks")
+    await connection.execute(
+        """
+        CREATE TABLE chunks (
+            id text PRIMARY KEY, title text NOT NULL, content text NOT NULL, document_id text NOT NULL,
+            document_title text NOT NULL, document_file text NOT NULL, source_urls text[] NOT NULL,
+            embedding_model text NOT NULL, embedding vector(1536) NOT NULL
+        )
+        """
+    )
+
+    await db.ensure_schema(connection)
+    await db.ensure_schema(connection)  # idempotent
+
+    cursor = await connection.execute(
+        """
+        SELECT array_agg(a.attname::text ORDER BY a.attname)
+        FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY (i.indkey)
+        WHERE i.indrelid = 'chunks'::regclass AND i.indisprimary
+        """
+    )
+    assert (await cursor.fetchone())[0] == ["embedding_model", "id"]
 
 
 async def test_search_orders_by_cosine_distance(connection):
