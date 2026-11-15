@@ -31,8 +31,15 @@ async def _post(path: str, body: dict) -> dict:
     return response.json()
 
 
+EMBEDDING_DIMENSIONS = 1536  # must match vector(1536) in schema.sql
+
+
 async def embed(inputs: list[str], model: str) -> list[list[float]]:
-    result = await _post("/embeddings", {"model": model, "input": inputs})
+    body: dict = {"model": model, "input": inputs}
+    if model.startswith("text-embedding-3"):
+        # text-embedding-3-large returns 3072 dimensions by default; ask for the column size.
+        body["dimensions"] = EMBEDDING_DIMENSIONS
+    result = await _post("/embeddings", body)
     return [item["embedding"] for item in sorted(result["data"], key=lambda item: item["index"])]
 
 

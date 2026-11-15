@@ -4,14 +4,17 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import TypedDict
 
+import psycopg
+from pgvector.psycopg import register_vector_async
+
+import db
+from db import Chunk, Document, ScoredChunk
 from openai_client import chat, embed, embedding_model
 
 logger = logging.getLogger(__name__)
 
 DOCS_DIR = Path(__file__).parent / "mondria-rag-docs"
-INDEX_FILE = Path(__file__).parent / "data" / "index.json"
 TOP_K = 4
 
 # Every "## " heading is a boundary; only headings with an ID ("## MON-01-01 — Title") become chunks.
@@ -37,34 +40,6 @@ ANSWER_SCHEMA = {
         "additionalProperties": False,
     },
 }
-
-
-class Document(TypedDict):
-    id: str
-    title: str
-    file: str
-    source_urls: list[str]
-
-
-class Chunk(TypedDict):
-    id: str
-    title: str
-    text: str
-    document: Document
-
-
-class ScoredChunk(Chunk):
-    score: float
-    cited: bool
-
-
-class IndexedChunk(Chunk):
-    embedding: list[float]
-
-
-class Index(TypedDict):
-    model: str
-    chunks: list[IndexedChunk]
 
 
 def parse_document(file: Path, text: str) -> Document:
@@ -95,53 +70,43 @@ def split_sections(document: Document, text: str) -> list[Chunk]:
     return sections
 
 
-async def build_index(model: str) -> Index:
-    """Indexing step: split the docs into sections and embed each one."""
+def load_chunks() -> list[Chunk]:
     chunks: list[Chunk] = []
     for file in sorted(DOCS_DIR.glob("*.md")):
         text = file.read_text(encoding="utf-8")
         chunks.extend(split_sections(parse_document(file, text), text))
+    return chunks
+
+
+async def index_documents(connection: psycopg.AsyncConnection, model: str) -> int:
+    """Indexing step: split the docs into sections, embed them in one batch and store them."""
+    chunks = load_chunks()
     embeddings = await embed([chunk["text"] for chunk in chunks], model)
-    return Index(
-        model=model,
-        chunks=[IndexedChunk(**chunk, embedding=embedding) for chunk, embedding in zip(chunks, embeddings)],
-    )
+    await db.replace_chunks(connection, chunks, embeddings, model)
+    return len(chunks)
 
 
-_index: Index | None = None
+_ready_model: str | None = None
 
 
-async def get_index() -> Index:
-    """Loaded once per function instance. The committed index is reused when it was built with
-    the configured embedding model; otherwise the index is rebuilt in memory from the docs, so
-    changing OPENAI_EMBEDDING_MODEL on Vercel only needs a redeploy."""
-    global _index
+async def open_connection() -> psycopg.AsyncConnection:
+    """Opens a connection ready for vector queries. The first time per function instance it
+    also creates the schema and, if the table has no chunks for the configured embedding
+    model, indexes the docs. Changing OPENAI_EMBEDDING_MODEL on Vercel then only needs a
+    redeploy: the first request re-embeds the 21 chunks."""
+    global _ready_model
     model = embedding_model()
-    if _index is None or _index["model"] != model:
-        committed: Index | None = json.loads(INDEX_FILE.read_text(encoding="utf-8")) if INDEX_FILE.exists() else None
-        # An index built before document metadata existed is treated like a model mismatch.
-        if committed and committed["model"] == model and "document" in committed["chunks"][0]:
-            _index = committed
-        else:
-            logger.warning("Committed index does not match %s, rebuilding it in memory", model)
-            _index = await build_index(model)
-    return _index
+    connection = await db.connect()
+    if _ready_model == model:
+        await register_vector_async(connection)
+        return connection
 
-
-def search(index: Index, query_embedding: list[float], top_k: int = TOP_K) -> list[ScoredChunk]:
-    # OpenAI embeddings are normalized to length 1, so the dot product is the cosine similarity.
-    scored = [
-        ScoredChunk(
-            id=chunk["id"],
-            title=chunk["title"],
-            text=chunk["text"],
-            document=chunk["document"],
-            score=sum(q * c for q, c in zip(query_embedding, chunk["embedding"])),
-            cited=False,
-        )
-        for chunk in index["chunks"]
-    ]
-    return sorted(scored, key=lambda chunk: chunk["score"], reverse=True)[:top_k]
+    await db.ensure_schema(connection)
+    if await db.count_chunks(connection, model) == 0:
+        logger.warning("No chunks embedded with %s, indexing the docs", model)
+        await index_documents(connection, model)
+    _ready_model = model
+    return connection
 
 
 def build_context(sources: list[ScoredChunk]) -> str:
@@ -149,11 +114,16 @@ def build_context(sources: list[ScoredChunk]) -> str:
     return "Context:\n" + "\n\n".join(f"[{chunk['id']}] {chunk['text']}" for chunk in sources)
 
 
+async def retrieve(question: str, top_k: int = TOP_K) -> list[ScoredChunk]:
+    """Retrieval step. The question must be embedded with the same model as the chunks."""
+    model = embedding_model()
+    [query_embedding] = await embed([question], model)
+    async with await open_connection() as connection:
+        return await db.search(connection, query_embedding, model, top_k)
+
+
 async def answer_question(question: str) -> dict:
-    # Retrieval. The question must be embedded with the same model as the index.
-    index = await get_index()
-    [query_embedding] = await embed([question], index["model"])
-    sources = search(index, query_embedding)
+    sources = await retrieve(question)
 
     # Generation. With a French context, the model tends to answer in French whatever the
     # question's language. Making it name the question's language first, in a structured
@@ -166,11 +136,11 @@ async def answer_question(question: str) -> dict:
         ],
         json_schema=ANSWER_SCHEMA,
     )
-
     answer = json.loads(raw)["answer"]
 
     # Sources the answer actually cites, as opposed to the ones that were only retrieved.
+    # The model sometimes drops the brackets ("section MON-02-04"), so match the bare ID.
     for source in sources:
-        source["cited"] = f"[{source['id']}]" in answer
+        source["cited"] = source["id"] in answer
 
     return {"answer": answer, "sources": sources}
