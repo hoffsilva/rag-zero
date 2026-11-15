@@ -55,6 +55,7 @@ api/
   mcp_server.py           MCP server (stdio): search_mondria_docs, ask_mondria
   eval/questions.json     Evaluation set (29 questions)
   eval/run_eval.py        Hit rate, MRR, threshold FP/FN, answer error rate
+  tests/                  pytest suite (unit, API, Postgres integration)
 web/
   app/page.tsx            Demo page
   app/evaluation/page.tsx Evaluation report page
@@ -107,7 +108,7 @@ bun dev                       # http://localhost:3000
 The tool docstrings are what the model reads to decide when to call each tool. The server runs over stdio: the client starts it as a subprocess and talks JSON-RPC through stdin/stdout. It reads `api/.env.local` and uses the same database as the API.
 
 ```bash
-pip install -r api/requirements-dev.txt
+pip install -r api/requirements-dev.txt   # mcp, pytest
 claude mcp add mondria-rag -- "$PWD/.venv/bin/python" "$PWD/api/mcp_server.py"
 ```
 
@@ -144,6 +145,21 @@ The larger model didn't help, so the app stays on the small one. The misses have
 | 0.45 | 2 | 5 | 24% |
 
 A threshold only catches off-topic questions (weather 0.31, poutine 0.13). On-topic questions without an answer in the docs (CEO 0.53, headcount 0.53) score like answerable ones (lowest 0.40), so no threshold separates them: the LLM's "answer only from the context" rule is what refuses them. A threshold around 0.35 would still be useful as a cheap filter that skips the chat call for off-topic questions, with no false negatives on this set.
+
+## Tests
+
+```bash
+cd api && pytest
+```
+
+25 tests, under a second, without calling OpenAI:
+
+- **Chunking**: frontmatter parsing, section boundaries (the trailing `Documents associés` and `Sources` don't leak into the last section), and the real knowledge base (21 unique sections, each with its document and source URLs).
+- **RAG pipeline**: with retrieval and the chat call replaced by fakes, the question goes last with the structured answer schema, and cited sections are detected with or without brackets.
+- **API** (FastAPI `TestClient`): health check, 422 for empty or too long questions, and internal errors returned as a generic 500 without leaking details.
+- **Evaluation metrics**: hit rate, MRR, document hit rate and the false positive / negative counts on hand-made data.
+- **MCP tools**: `top_k` clamping and the shape of both tools' results.
+- **Postgres + pgvector** (integration): idempotent re-indexing, deleted sections and old-model rows removed, and results ordered by cosine distance with exact scores (1.0 and 0.707 on synthetic unit vectors). Each test runs in a temporary schema that is dropped afterwards; they are skipped when no database is configured.
 
 ## Deploying to Vercel
 

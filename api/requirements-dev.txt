@@ -1,2 +1,3 @@
-# Local development only (not deployed): MCP server
+# Local development only (not deployed)
 mcp==2.3.0
+pytest==9.2.0
