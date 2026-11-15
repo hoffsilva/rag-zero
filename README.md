@@ -10,6 +10,7 @@ The project has two parts:
 
 - **`api/`**: the RAG backend in Python (FastAPI). Chunking, indexing, retrieval, prompt and generation all live here. Chunks and embeddings are stored in Postgres with pgvector.
 - **`web/`**: the Next.js frontend. It only renders the page and calls `POST /api/ask`.
+- **`api/mcp_server.py`**: an MCP server that exposes the same knowledge base as tools to MCP clients such as Claude Code.
 
 Both `api/` and `web/` deploy as one Vercel project through [Vercel Services](https://vercel.com/docs/services): `/api/*` goes to Python, everything else to Next.js.
 
@@ -51,6 +52,7 @@ api/
   schema.sql              chunks table, vector(1536) column, HNSW index
   openai_client.py        Embeddings and chat calls
   build_index.py          Indexes the docs into Postgres (idempotent)
+  mcp_server.py           MCP server (stdio): search_mondria_docs, ask_mondria
 web/
   app/page.tsx            Page
   components/ask-form.tsx Question UI, calls /api/ask
@@ -90,6 +92,22 @@ cd web
 bun install
 bun dev                       # http://localhost:3000
 ```
+
+## MCP server
+
+`api/mcp_server.py` exposes the knowledge base over the [Model Context Protocol](https://modelcontextprotocol.io/), so an AI assistant can query it on its own:
+
+- **`search_mondria_docs(query, top_k)`**: retrieval only. Returns the closest sections with their ID, document and score; the assistant writes the answer itself and cites the IDs.
+- **`ask_mondria(question)`**: the full RAG pipeline, same answer as the web demo.
+
+The tool docstrings are what the model reads to decide when to call each tool. The server runs over stdio: the client starts it as a subprocess and talks JSON-RPC through stdin/stdout. It reads `api/.env.local` and uses the same database as the API.
+
+```bash
+pip install -r api/requirements-dev.txt
+claude mcp add mondria-rag -- "$PWD/.venv/bin/python" "$PWD/api/mcp_server.py"
+```
+
+Then ask Claude Code something like "Where are Mondria's offices?" and it calls `search_mondria_docs`.
 
 ## Deploying to Vercel
 
