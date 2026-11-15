@@ -10,7 +10,7 @@ from pgvector.psycopg import register_vector_async
 
 import db
 from db import Chunk, Document, ScoredChunk
-from openai_client import chat, embed, embedding_model
+from openai_client import ChatRefusal, chat, embed, embedding_model
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +19,9 @@ TOP_K = 4
 
 # Every "## " heading is a boundary; only headings with an ID ("## MON-01-01 — Title") become chunks.
 SECTION_PATTERN = re.compile(r"^## (?:(?P<id>[A-Z]+-\d+-\d+) — )?(?P<title>.+)$", re.MULTILINE)
+
+# A section ID as a whole token: "[MON-01-04]" or "MON-01-04", but not inside "MON-01-040".
+CITED_ID_PATTERN = re.compile(r"(?<![\w-])[A-Z]+-\d+-\d+(?![\w-])")
 
 SYSTEM_PROMPT = """You answer questions about the company Mondria using a knowledge base written in French.
 Answer only from the provided context.
@@ -86,27 +89,44 @@ async def index_documents(connection: psycopg.AsyncConnection, model: str) -> in
     return len(chunks)
 
 
+# Arbitrary constant identifying this app's indexing lock in pg_advisory_xact_lock.
+INDEX_LOCK_KEY = 7_201_204
+
 _ready_model: str | None = None
+
+
+async def prepare(connection: psycopg.AsyncConnection, model: str) -> None:
+    """Creates the schema and indexes the docs if the table has no chunks for the model.
+
+    Runs in one transaction under a Postgres advisory lock, so when several cold instances
+    start together only the first one indexes; the others wait, then see the chunks and skip.
+    """
+    async with connection.transaction():
+        await connection.execute("SELECT pg_advisory_xact_lock(%s)", (INDEX_LOCK_KEY,))
+        await db.ensure_schema(connection)
+        if await db.count_chunks(connection, model) == 0:
+            logger.warning("No chunks embedded with %s, indexing the docs", model)
+            await index_documents(connection, model)
+    # Leaving the block committed the transaction (and released the lock).
 
 
 async def open_connection() -> psycopg.AsyncConnection:
     """Opens a connection ready for vector queries. The first time per function instance it
-    also creates the schema and, if the table has no chunks for the configured embedding
-    model, indexes the docs. Changing OPENAI_EMBEDDING_MODEL on Vercel then only needs a
-    redeploy: the first request re-embeds the 21 chunks."""
+    also prepares the database (see prepare). Changing OPENAI_EMBEDDING_MODEL on Vercel then
+    only needs a redeploy: the first request embeds the 21 chunks with the new model."""
     global _ready_model
     model = embedding_model()
     connection = await db.connect()
-    if _ready_model == model:
-        await register_vector_async(connection)
+    try:
+        if _ready_model == model:
+            await register_vector_async(connection)
+        else:
+            await prepare(connection, model)
+            _ready_model = model  # only after the indexing is committed
         return connection
-
-    await db.ensure_schema(connection)
-    if await db.count_chunks(connection, model) == 0:
-        logger.warning("No chunks embedded with %s, indexing the docs", model)
-        await index_documents(connection, model)
-    _ready_model = model
-    return connection
+    except BaseException:
+        await connection.close()  # also on cancellation, so no connection or lock is left behind
+        raise
 
 
 def build_context(sources: list[ScoredChunk]) -> str:
@@ -128,19 +148,24 @@ async def answer_question(question: str) -> dict:
     # Generation. With a French context, the model tends to answer in French whatever the
     # question's language. Making it name the question's language first, in a structured
     # response, keeps the answer in that language.
-    raw = await chat(
-        [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "system", "content": build_context(sources)},
-            {"role": "user", "content": question},
-        ],
-        json_schema=ANSWER_SCHEMA,
-    )
+    try:
+        raw = await chat(
+            [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": build_context(sources)},
+                {"role": "user", "content": question},
+            ],
+            json_schema=ANSWER_SCHEMA,
+        )
+    except ChatRefusal as refusal:
+        # A refusal is an answer, not a server error: show it, with nothing cited.
+        return {"answer": str(refusal), "sources": sources}
     answer = json.loads(raw)["answer"]
 
     # Sources the answer actually cites, as opposed to the ones that were only retrieved.
-    # The model sometimes drops the brackets ("section MON-02-04"), so match the bare ID.
+    # IDs are compared as whole tokens; the model sometimes drops the brackets.
+    cited_ids = set(CITED_ID_PATTERN.findall(answer))
     for source in sources:
-        source["cited"] = source["id"] in answer
+        source["cited"] = source["id"] in cited_ids
 
     return {"answer": answer, "sources": sources}

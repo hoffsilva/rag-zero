@@ -47,9 +47,25 @@ async def embed(inputs: list[str], model: str) -> list[list[float]]:
     return [item["embedding"] for item in sorted(result["data"], key=lambda item: item["index"])]
 
 
+# Hard cap on the generated answer: bounds the cost of every public request, whatever the prompt
+# says. A concise answer with citations is well under 200 tokens.
+MAX_ANSWER_TOKENS = 500
+
+
+class ChatRefusal(Exception):
+    """The model declined to answer (Structured Outputs returns a refusal instead of JSON)."""
+
+
 async def chat(messages: list[dict[str, str]], json_schema: dict | None = None) -> str:
-    body: dict = {"model": chat_model(), "messages": messages}
+    body: dict = {"model": chat_model(), "messages": messages, "max_completion_tokens": MAX_ANSWER_TOKENS}
     if json_schema:
         body["response_format"] = {"type": "json_schema", "json_schema": json_schema}
     result = await _post("/chat/completions", body)
-    return (result["choices"][0]["message"]["content"] or "").strip()
+    choice = result["choices"][0]
+    message = choice["message"]
+    if message.get("refusal"):
+        raise ChatRefusal(message["refusal"])
+    if choice.get("finish_reason") != "stop":
+        # "length" means the answer hit MAX_ANSWER_TOKENS; truncated JSON can't be parsed.
+        raise RuntimeError(f"Chat completion did not finish (finish_reason={choice.get('finish_reason')})")
+    return (message.get("content") or "").strip()

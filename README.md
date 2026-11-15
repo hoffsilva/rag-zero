@@ -35,11 +35,11 @@ flowchart LR
 ## Design decisions
 
 - **One chunk per section.** Each doc is split on its `## MON-xx-yy — Title` headings. One chunk covers one topic, so its embedding stays focused and the IDs double as citations. Non-content sections (`Documents associés`, `Sources`) are boundaries only.
-- **Postgres + pgvector.** Each section is a row in `chunks` with an `embedding vector(1536)` column, and the search is plain SQL ordered by cosine distance (`<=>`, ascending). The section ID is the primary key, so re-indexing upserts instead of duplicating rows. An HNSW index is there for scale: with 21 rows Postgres doesn't need it, with millions it trades a bit of recall for speed. Locally it runs in Docker (`pgvector/pgvector:pg17`); on Vercel it's Neon.
+- **Postgres + pgvector.** Each section is a row in `chunks` with an `embedding vector(1536)` column, and the search is plain SQL ordered by cosine distance (`<=>`, ascending). The primary key is (section ID, embedding model): re-indexing upserts instead of duplicating rows, and several models can coexist, so indexing one never wipes the vectors another deployment or an evaluation run is using. When cold instances start together, a Postgres advisory lock lets only the first one index; the others wait and reuse its rows. An HNSW index is there for scale: with 21 rows Postgres doesn't need it, with millions it trades a bit of recall for speed. Locally it runs in Docker (`pgvector/pgvector:pg17`); on Vercel it's Neon.
 - **API embeddings instead of a local model.** My first prototype used `intfloat/multilingual-e5-small` locally, but PyTorch doesn't fit in a serverless function. The backend uses OpenAI for embeddings and generation, so the function stays small (FastAPI, httpx, psycopg, pgvector).
-- **Embedding model from the environment.** `OPENAI_EMBEDDING_MODEL` picks the model. The question has to be embedded with the same model as the index, so each row stores its `embedding_model`. On its first request the API checks that the table has chunks for the configured model and, if not, re-indexes the docs (one API call for 21 chunks). Other `text-embedding-3` models are asked for 1536 dimensions so the column never changes. Switching models on Vercel is a variable change and a redeploy.
+- **Embedding model from the environment.** `OPENAI_EMBEDDING_MODEL` picks the model. The question has to be embedded with the same model as the index, so each row stores its `embedding_model` and searches filter on it. On its first request the API checks that the table has chunks for the configured model and, if not, indexes the docs with it (one API call for 21 chunks). Other `text-embedding-3` models are asked for 1536 dimensions so the column never changes. Switching models on Vercel is a variable change and a redeploy.
 - **Answer language.** With a French context, the model kept answering Portuguese questions in French. The fix was a structured response that makes the model name the question's language before writing the answer.
-- **Public-demo guardrails.** The API key only exists in the Python service, questions are capped at 300 characters and `top_k` is fixed on the server.
+- **Public-demo guardrails.** The API key only exists in the Python service, questions are capped at 300 characters, `top_k` is fixed on the server and answers are capped at 500 tokens (`max_completion_tokens`), so each request has a bounded cost. A model refusal is shown as the answer instead of failing, and internal errors return a generic message. Request rate limiting isn't in the code: on Vercel it's a Firewall rate-limit rule on `/api/ask`, plus a monthly spending cap on the OpenAI account.
 
 ## Project structure
 
@@ -54,7 +54,7 @@ api/
   build_index.py          Indexes the docs into Postgres (idempotent)
   mcp_server.py           MCP server (stdio): search_mondria_docs, ask_mondria
   eval/questions.json     Evaluation set (29 questions)
-  eval/run_eval.py        Hit rate, MRR, threshold FP/FN, answer error rate
+  eval/run_eval.py        Hit rate, MRR, threshold FP/FN, citation compliance
   tests/                  pytest suite (unit, API, Postgres integration)
 web/
   app/page.tsx            Demo page
@@ -130,11 +130,11 @@ cd api && python eval/run_eval.py --answers --save
 | hit rate@5 | **100%** | 96% |
 | MRR | **0.837** | 0.828 |
 | document hit rate@5 | 100% | 100% |
-| answer error rate | **3%** | 14% |
+| citation error rate | **3%** | 7% |
 
-The larger model didn't help, so the app stays on the small one. The misses have the same cause with both models: the two generic sections about the company (`MON-01-01` Identité, `MON-01-02` Positionnement) mention every service, so they rank first for broad questions. With k=4 the right section is still in the context, which is why the answers are right.
+The larger model didn't help, so the app stays on the small one. The misses have the same cause with both models: the two generic sections about the company (`MON-01-01` Identité, `MON-01-02` Positionnement) mention every service, so they rank first for broad questions. The LLM receives the top 4 sections: with the small model every expected section is among them, while with the large one two aren't (ranks 5 and below 5), and those are exactly its two citation errors.
 
-**Answers: 3% error rate (1/29) with the small model.** All 6 unanswerable questions get "not available" with no citation. The one miss is a correct answer without its citation, which the strict metric counts as wrong. Answers vary slightly between runs (an earlier run scored 0/29), so a single run is a sample, not a fixed number.
+**Citation compliance: 3% error rate (1/29) with the small model.** An answerable question passes when the answer cites an expected section; an unanswerable one passes when it cites nothing. All 6 unanswerable questions got "not available" with no citation; the one miss is an answer about Etudia without its citation. This measures citations, not factual accuracy: a wrong answer that cites the right section, or an invented one with no citation, would pass, so it complements reading the answers (they're all on the evaluation page) rather than replacing it. Answers vary slightly between runs, so a single run is a sample, not a fixed number.
 
 **Threshold on the top-1 similarity.** Treating a low top-1 score as "not in the docs":
 
@@ -149,19 +149,19 @@ A threshold only catches off-topic questions (weather 0.31, poutine 0.13). On-to
 ## Tests
 
 ```bash
-cd api && pytest                                          # 24 tests, database tests skipped
-TEST_DATABASE_URL=postgresql://postgres:<password>@localhost:5433/postgres pytest   # all 28
+cd api && pytest                                          # 30 tests, database tests skipped
+TEST_DATABASE_URL=postgresql://postgres:<password>@localhost:5433/postgres pytest   # all 35
 ```
 
-28 tests, under a second. They never call OpenAI: a fixture makes any real API call fail the test, and `.env.local` isn't loaded during the run.
+35 tests, under a second. They never call OpenAI: a fixture makes any real API call fail the test, and `.env.local` isn't loaded during the run.
 
 - **Chunking**: frontmatter parsing, section boundaries (the trailing `Documents associés` and `Sources` don't leak into the last section), and the real knowledge base (21 unique sections, each with its document and source URLs).
-- **RAG pipeline**: with retrieval and the chat call replaced by fakes, the model receives the question and every retrieved section, and cited sections are detected with or without brackets. With the database faked, the first request indexes an empty table, reuses existing chunks, and re-indexes when `OPENAI_EMBEDDING_MODEL` changes (the Vercel redeploy path).
-- **Embeddings client**: `text-embedding-3` models are asked for 1536 dimensions (the column size), `ada-002` isn't, and vectors come back in input order.
+- **RAG pipeline**: with retrieval and the chat call replaced by fakes, the model receives the question and every retrieved section, and cited sections are detected with or without brackets. With the database faked, the first request indexes an empty table, reuses existing chunks, and re-indexes when `OPENAI_EMBEDDING_MODEL` changes (the Vercel redeploy path) under the advisory lock; a failed indexing rolls back, closes the connection and leaves the instance not ready. Citations are matched as whole IDs, and a model refusal becomes the answer.
+- **OpenAI client**: `text-embedding-3` models are asked for 1536 dimensions (the column size), `ada-002` isn't, vectors come back in input order; answers are capped with `max_completion_tokens`, and refusals and truncated answers raise instead of returning unparseable content.
 - **API** (FastAPI `TestClient`): health check, 422 for empty or too long questions before the pipeline runs, and internal errors returned as a generic 500 without leaking details.
 - **Evaluation metrics**: hit rate, MRR, document hit rate and the false positive / negative counts on hand-made data.
 - **MCP tools**: `top_k` clamping and the shape of the search results.
-- **Postgres + pgvector** (integration): idempotent re-indexing, deleted sections and old-model rows removed, and results ordered by cosine distance with exact scores (1.0 and 0.707 on synthetic unit vectors). Each test runs in a temporary schema that is dropped afterwards, even when setup fails. They are skipped only when `TEST_DATABASE_URL` isn't set; with it set, a connection error fails the run instead of passing silently.
+- **Postgres + pgvector** (integration): idempotent re-indexing, deleted sections removed, models coexisting, migration of the old single-column primary key, and results ordered by cosine distance with exact scores (1.0 and 0.707 on synthetic unit vectors). Each test runs in a temporary schema that is dropped afterwards, even when setup fails. They are skipped only when `TEST_DATABASE_URL` isn't set; with it set, a connection error fails the run instead of passing silently.
 
 ## Deploying to Vercel
 

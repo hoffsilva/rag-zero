@@ -56,8 +56,8 @@ async def replace_chunks(
     embeddings: list[list[float]],
     model: str,
 ) -> None:
-    """Idempotent: upserts every chunk by its section ID and deletes rows that no longer
-    exist in the docs or were embedded with another model, all in one transaction."""
+    """Idempotent: upserts every chunk by (section ID, model) and deletes this model's rows for
+    sections that no longer exist in the docs, in one transaction. Other models' rows stay."""
     async with connection.transaction():
         async with connection.cursor() as cursor:
             await cursor.executemany(
@@ -65,14 +65,13 @@ async def replace_chunks(
                 INSERT INTO chunks (id, title, content, document_id, document_title, document_file,
                                     source_urls, embedding_model, embedding)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (id) DO UPDATE SET
+                ON CONFLICT (id, embedding_model) DO UPDATE SET
                     title = EXCLUDED.title,
                     content = EXCLUDED.content,
                     document_id = EXCLUDED.document_id,
                     document_title = EXCLUDED.document_title,
                     document_file = EXCLUDED.document_file,
                     source_urls = EXCLUDED.source_urls,
-                    embedding_model = EXCLUDED.embedding_model,
                     embedding = EXCLUDED.embedding
                 """,
                 [
@@ -91,8 +90,8 @@ async def replace_chunks(
                 ],
             )
             await cursor.execute(
-                "DELETE FROM chunks WHERE NOT (id = ANY(%s)) OR embedding_model <> %s",
-                ([chunk["id"] for chunk in chunks], model),
+                "DELETE FROM chunks WHERE embedding_model = %s AND NOT (id = ANY(%s))",
+                (model, [chunk["id"] for chunk in chunks]),
             )
 
 

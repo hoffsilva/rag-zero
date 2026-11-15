@@ -69,18 +69,42 @@ async def test_answer_without_citation_marks_nothing(model_answers):
     assert not any(s["cited"] for s in result["sources"])
 
 
+class FakeTransaction:
+    def __init__(self, state: dict):
+        self.state = state
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        self.state["committed" if exc_type is None else "rolled_back"] += 1
+
+
 class FakeConnection:
+    def __init__(self, state: dict):
+        self.state = state
+
+    def transaction(self):
+        return FakeTransaction(self.state)
+
+    async def execute(self, query: str, params=None):
+        if "pg_advisory_xact_lock" in query:
+            self.state["locked"] += 1
+
     async def close(self) -> None:
-        pass
+        self.state["closed"] += 1
 
 
 @pytest.fixture
 def database(monkeypatch):
     """Fakes the database layer and records what open_connection does."""
-    state = {"rows": {}, "indexed": [], "schema_created": 0, "registered": 0}
+    state = {
+        "rows": {}, "indexed": [], "schema_created": 0, "registered": 0,
+        "locked": 0, "committed": 0, "rolled_back": 0, "closed": 0, "fail_indexing": False,
+    }
 
     async def connect():
-        return FakeConnection()
+        return FakeConnection(state)
 
     async def ensure_schema(connection):
         state["schema_created"] += 1
@@ -89,8 +113,10 @@ def database(monkeypatch):
         return state["rows"].get(model, 0)
 
     async def index_documents(connection, model):
+        if state["fail_indexing"]:
+            raise RuntimeError("embeddings failed")
         state["indexed"].append(model)
-        state["rows"] = {model: 21}  # indexing replaces rows of any other model
+        state["rows"][model] = 21  # models coexist
         return 21
 
     async def register_vector(connection):
@@ -115,6 +141,8 @@ async def test_first_request_indexes_when_the_table_is_empty(database, monkeypat
     assert database["indexed"] == ["text-embedding-3-small"]
     assert database["schema_created"] == 1
     assert database["registered"] == 1
+    assert database["locked"] == 1  # indexing ran under the advisory lock
+    assert database["committed"] == 1
 
 
 @pytest.mark.anyio
@@ -137,3 +165,42 @@ async def test_changing_the_embedding_model_reindexes(database, monkeypatch):
     await rag.open_connection()
 
     assert database["indexed"] == ["text-embedding-3-large"]
+
+
+@pytest.mark.anyio
+async def test_failed_indexing_closes_the_connection_and_stays_not_ready(database, monkeypatch):
+    monkeypatch.setenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+    database["fail_indexing"] = True
+
+    with pytest.raises(RuntimeError):
+        await rag.open_connection()
+
+    assert database["rolled_back"] == 1
+    assert database["closed"] == 1
+    assert rag._ready_model is None  # the next request retries instead of trusting a rolled-back index
+
+
+@pytest.mark.anyio
+async def test_citations_are_matched_as_whole_ids(model_answers):
+    model_answers("Voir [MON-01-040] et MON-02-04x.")  # neither is a retrieved ID
+
+    result = await rag.answer_question("q")
+
+    assert not any(s["cited"] for s in result["sources"])
+
+
+@pytest.mark.anyio
+async def test_a_model_refusal_is_returned_as_the_answer(monkeypatch):
+    async def fake_retrieve(question: str, top_k: int = rag.TOP_K):
+        return [source("MON-01-04")]
+
+    async def refusing_chat(messages, json_schema=None):
+        raise rag.ChatRefusal("I can't help with that.")
+
+    monkeypatch.setattr(rag, "retrieve", fake_retrieve)
+    monkeypatch.setattr(rag, "chat", refusing_chat)
+
+    result = await rag.answer_question("q")
+
+    assert result["answer"] == "I can't help with that."
+    assert not result["sources"][0]["cited"]
