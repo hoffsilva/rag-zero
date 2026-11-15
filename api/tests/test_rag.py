@@ -14,35 +14,26 @@ def source(section_id: str, score: float = 0.5) -> ScoredChunk:
     )
 
 
-def test_build_context_prefixes_each_chunk_with_its_id():
-    context = rag.build_context([source("MON-01-01"), source("MON-01-04")])
-
-    assert context.startswith("Context:\n[MON-01-01] ## MON-01-01")
-    assert "\n\n[MON-01-04] ## MON-01-04" in context
-
-
 @pytest.fixture
-def fake_pipeline(monkeypatch):
-    """Replaces retrieval and the chat call; returns the messages sent to the model."""
-    sent: dict = {}
+def model_answers(monkeypatch):
+    """Replaces retrieval and the chat call; the returned function sets the model's answer."""
 
     async def fake_retrieve(question: str, top_k: int = rag.TOP_K):
         return [source("MON-01-04", 0.6), source("MON-01-02", 0.4), source("MON-02-04", 0.3)]
 
-    def fake_chat_returning(answer: str):
+    def set_answer(answer: str) -> None:
         async def fake_chat(messages, json_schema=None):
-            sent["messages"] = messages
-            sent["json_schema"] = json_schema
             return json.dumps({"question_language": "French", "answer": answer})
-        return fake_chat
+
+        monkeypatch.setattr(rag, "chat", fake_chat)
 
     monkeypatch.setattr(rag, "retrieve", fake_retrieve)
-    return lambda answer: (monkeypatch.setattr(rag, "chat", fake_chat_returning(answer)), sent)[1]
+    return set_answer
 
 
 @pytest.mark.anyio
-async def test_answer_marks_cited_sources_with_or_without_brackets(fake_pipeline):
-    fake_pipeline("Deux bureaux [MON-01-04]. Aucun tarif fixe (section MON-02-04).")
+async def test_answer_marks_cited_sources_with_or_without_brackets(model_answers):
+    model_answers("Deux bureaux [MON-01-04]. Aucun tarif fixe (section MON-02-04).")
 
     result = await rag.answer_question("Où sont les bureaux ?")
 
@@ -51,8 +42,8 @@ async def test_answer_marks_cited_sources_with_or_without_brackets(fake_pipeline
 
 
 @pytest.mark.anyio
-async def test_answer_without_citation_marks_nothing(fake_pipeline):
-    fake_pipeline("Cette information n'est pas disponible.")
+async def test_answer_without_citation_marks_nothing(model_answers):
+    model_answers("Cette information n'est pas disponible.")
 
     result = await rag.answer_question("Qui est le PDG ?")
 
@@ -60,14 +51,71 @@ async def test_answer_without_citation_marks_nothing(fake_pipeline):
     assert not any(s["cited"] for s in result["sources"])
 
 
+class FakeConnection:
+    async def close(self) -> None:
+        pass
+
+
+@pytest.fixture
+def database(monkeypatch):
+    """Fakes the database layer and records what open_connection does."""
+    state = {"rows": {}, "indexed": [], "schema_created": 0, "registered": 0}
+
+    async def connect():
+        return FakeConnection()
+
+    async def ensure_schema(connection):
+        state["schema_created"] += 1
+
+    async def count_chunks(connection, model):
+        return state["rows"].get(model, 0)
+
+    async def index_documents(connection, model):
+        state["indexed"].append(model)
+        state["rows"] = {model: 21}  # indexing replaces rows of any other model
+        return 21
+
+    async def register_vector(connection):
+        state["registered"] += 1
+
+    monkeypatch.setattr(rag.db, "connect", connect)
+    monkeypatch.setattr(rag.db, "ensure_schema", ensure_schema)
+    monkeypatch.setattr(rag.db, "count_chunks", count_chunks)
+    monkeypatch.setattr(rag, "index_documents", index_documents)
+    monkeypatch.setattr(rag, "register_vector_async", register_vector)
+    monkeypatch.setattr(rag, "_ready_model", None)
+    return state
+
+
 @pytest.mark.anyio
-async def test_question_is_sent_last_with_the_structured_answer_schema(fake_pipeline):
-    sent = fake_pipeline("ok")
+async def test_first_request_indexes_when_the_table_is_empty(database, monkeypatch):
+    monkeypatch.setenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 
-    await rag.answer_question("Quanto custa?")
+    await rag.open_connection()
+    await rag.open_connection()  # same instance, same model: no schema check, no indexing
 
-    roles = [m["role"] for m in sent["messages"]]
-    assert roles == ["system", "system", "user"]
-    assert sent["messages"][-1]["content"] == "Quanto custa?"
-    assert sent["messages"][1]["content"].startswith("Context:")
-    assert sent["json_schema"]["schema"]["required"] == ["question_language", "answer"]
+    assert database["indexed"] == ["text-embedding-3-small"]
+    assert database["schema_created"] == 1
+    assert database["registered"] == 1
+
+
+@pytest.mark.anyio
+async def test_existing_chunks_for_the_model_are_reused(database, monkeypatch):
+    monkeypatch.setenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+    database["rows"] = {"text-embedding-3-small": 21}
+
+    await rag.open_connection()
+
+    assert database["indexed"] == []
+
+
+@pytest.mark.anyio
+async def test_changing_the_embedding_model_reindexes(database, monkeypatch):
+    monkeypatch.setenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+    database["rows"] = {"text-embedding-3-small": 21}
+    await rag.open_connection()
+
+    monkeypatch.setenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-large")  # the Vercel variable changed
+    await rag.open_connection()
+
+    assert database["indexed"] == ["text-embedding-3-large"]

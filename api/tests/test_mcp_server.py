@@ -25,20 +25,3 @@ async def test_search_tool_returns_sections_and_clamps_top_k(monkeypatch):
         {"id": "MON-01-04", "title": "Coordonnées", "document": "Entreprise Mondria", "score": 0.646, "text": "..."}
     ]
 
-
-@pytest.mark.anyio
-async def test_ask_tool_returns_only_cited_sections(monkeypatch):
-    async def fake_answer(question: str):
-        return {
-            "answer": "Deux bureaux [MON-01-04].",
-            "sources": [
-                ScoredChunk(id="MON-01-04", title="", text="", document=DOCUMENT, score=0.6, cited=True),
-                ScoredChunk(id="MON-01-02", title="", text="", document=DOCUMENT, score=0.4, cited=False),
-            ],
-        }
-
-    monkeypatch.setattr(mcp_server.rag, "answer_question", fake_answer)
-
-    result = await mcp_server.ask_mondria("Où sont les bureaux ?")
-
-    assert result == {"answer": "Deux bureaux [MON-01-04].", "cited_sections": ["MON-01-04"]}

@@ -152,13 +152,14 @@ A threshold only catches off-topic questions (weather 0.31, poutine 0.13). On-to
 cd api && pytest
 ```
 
-25 tests, under a second, without calling OpenAI:
+27 tests, under a second, without calling OpenAI:
 
 - **Chunking**: frontmatter parsing, section boundaries (the trailing `Documents associés` and `Sources` don't leak into the last section), and the real knowledge base (21 unique sections, each with its document and source URLs).
-- **RAG pipeline**: with retrieval and the chat call replaced by fakes, the question goes last with the structured answer schema, and cited sections are detected with or without brackets.
+- **RAG pipeline**: with retrieval and the chat call replaced by fakes, cited sections are detected with or without brackets. With the database faked, the first request indexes an empty table, reuses existing chunks, and re-indexes when `OPENAI_EMBEDDING_MODEL` changes (the Vercel redeploy path).
+- **Embeddings client**: `text-embedding-3` models are asked for 1536 dimensions (the column size), `ada-002` isn't, and vectors come back in input order.
 - **API** (FastAPI `TestClient`): health check, 422 for empty or too long questions, and internal errors returned as a generic 500 without leaking details.
 - **Evaluation metrics**: hit rate, MRR, document hit rate and the false positive / negative counts on hand-made data.
-- **MCP tools**: `top_k` clamping and the shape of both tools' results.
+- **MCP tools**: `top_k` clamping and the shape of the search results.
 - **Postgres + pgvector** (integration): idempotent re-indexing, deleted sections and old-model rows removed, and results ordered by cosine distance with exact scores (1.0 and 0.707 on synthetic unit vectors). Each test runs in a temporary schema that is dropped afterwards; they are skipped when no database is configured.
 
 ## Deploying to Vercel

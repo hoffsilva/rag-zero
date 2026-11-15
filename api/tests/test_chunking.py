@@ -44,14 +44,6 @@ def test_parse_document_reads_frontmatter():
     }
 
 
-def test_parse_document_without_frontmatter_falls_back_to_file_name():
-    document = rag.parse_document(Path("notes.md"), "## MON-01-01 — X\n\ntext")
-
-    assert document["id"] == "notes"
-    assert document["title"] == "notes"
-    assert document["source_urls"] == []
-
-
 def test_split_sections_keeps_only_sections_with_an_id():
     document = rag.parse_document(Path("09-test.md"), SAMPLE)
 

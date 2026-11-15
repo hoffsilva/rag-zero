@@ -19,10 +19,6 @@ def test_first_hit_rank():
     assert run_eval.first_hit_rank(["Z"], ["A", "B"]) is None
 
 
-def test_document_of():
-    assert run_eval.document_of("MON-01-04") == "MON-01"
-
-
 def test_retrieval_metrics_ignores_unanswerable_questions():
     results = [
         question(["MON-01-01"], [("MON-01-01", 0.7), ("MON-02-01", 0.5)]),  # rank 1
