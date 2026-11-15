@@ -2,6 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 
+import { STRATEGIES, strategyLabel, type Strategy } from "@/lib/strategies";
+
 // Response of POST /api/ask, served by the Python API in api/main.py.
 interface SourceDocument {
   id: string;
@@ -22,6 +24,7 @@ interface Source {
 interface RagAnswer {
   answer: string;
   sources: Source[];
+  strategy: Strategy;
 }
 
 const DOCS_BASE_URL = "https://github.com/hoffsilva/rag-zero/blob/main/api/mondria-rag-docs";
@@ -90,6 +93,7 @@ export function AskForm() {
   const [question, setQuestion] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [result, setResult] = useState<RagAnswer | null>(null);
+  const [strategy, setStrategy] = useState<Strategy | "">("");
 
   async function ask(text: string) {
     const trimmed = text.trim();
@@ -104,7 +108,7 @@ export function AskForm() {
       const response = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: trimmed }),
+        body: JSON.stringify({ question: trimmed, ...(strategy && { strategy }) }),
       });
       if (!response.ok) {
         throw new Error(`Request failed with ${response.status}`);
@@ -147,6 +151,22 @@ export function AskForm() {
           </button>
         </form>
 
+        <label className="flex items-center gap-3 text-sm text-ink/70">
+          Stratégie de recherche
+          <select
+            value={strategy}
+            onChange={(event) => setStrategy(event.target.value as Strategy | "")}
+            className="rounded-full border border-ink/15 bg-navy-raised px-3 py-1.5 text-ink outline-none focus:border-ink/40"
+          >
+            <option value="">Par défaut</option>
+            {STRATEGIES.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <div className="flex flex-wrap gap-2">
           {EXAMPLES.map((example) => (
             <button
@@ -167,8 +187,9 @@ export function AskForm() {
         <section className="flex flex-col gap-8">
           <div className="rounded-2xl border border-ink/10 bg-navy-raised/95 p-7">
             <span className="block size-2 bg-accent" aria-hidden />
-            <div className="mt-4">
+            <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2">
               <Eyebrow>Réponse</Eyebrow>
+              <span className="text-xs text-ink/50">Recherche : {strategyLabel(result.strategy)}</span>
             </div>
             <p className="mt-3 whitespace-pre-line text-lg leading-relaxed">{result.answer}</p>
           </div>

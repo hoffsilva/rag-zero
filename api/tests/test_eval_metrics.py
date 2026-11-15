@@ -10,6 +10,7 @@ def question(expected: list[str], retrieved: list[tuple[str, float]]) -> run_eva
         expected=expected,
         retrieved=[run_eval.Retrieved(id=section, score=score) for section, score in retrieved],
         rank=run_eval.first_hit_rank(expected, ids) if expected else None,
+        latency_ms=10,
     )
 
 

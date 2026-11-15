@@ -9,6 +9,7 @@ import psycopg
 from pgvector.psycopg import register_vector_async
 
 import db
+import retrieval
 from db import Chunk, Document, ScoredChunk
 from openai_client import ChatRefusal, chat, embed, embedding_model
 
@@ -134,16 +135,20 @@ def build_context(sources: list[ScoredChunk]) -> str:
     return "Context:\n" + "\n\n".join(f"[{chunk['id']}] {chunk['text']}" for chunk in sources)
 
 
-async def retrieve(question: str, top_k: int = TOP_K) -> list[ScoredChunk]:
-    """Retrieval step. The question must be embedded with the same model as the chunks."""
-    model = embedding_model()
-    [query_embedding] = await embed([question], model)
+async def retrieve(
+    question: str, top_k: int = TOP_K, strategy: retrieval.Strategy | None = None
+) -> list[ScoredChunk]:
+    """Retrieval step with the given strategy (RETRIEVAL_STRATEGY by default; see retrieval.py).
+    The question is embedded with the same model as the chunks."""
     async with await open_connection() as connection:
-        return await db.search(connection, query_embedding, model, top_k)
+        return await retrieval.run(
+            strategy or retrieval.default_strategy(), connection, question, embedding_model(), top_k
+        )
 
 
-async def answer_question(question: str) -> dict:
-    sources = await retrieve(question)
+async def answer_question(question: str, strategy: retrieval.Strategy | None = None) -> dict:
+    strategy = strategy or retrieval.default_strategy()
+    sources = await retrieve(question, strategy=strategy)
 
     # Generation. With a French context, the model tends to answer in French whatever the
     # question's language. Making it name the question's language first, in a structured
@@ -159,7 +164,7 @@ async def answer_question(question: str) -> dict:
         )
     except ChatRefusal as refusal:
         # A refusal is an answer, not a server error: show it, with nothing cited.
-        return {"answer": str(refusal), "sources": sources}
+        return {"answer": str(refusal), "sources": sources, "strategy": strategy}
     answer = json.loads(raw)["answer"]
 
     # Sources the answer actually cites, as opposed to the ones that were only retrieved.
@@ -168,4 +173,4 @@ async def answer_question(question: str) -> dict:
     for source in sources:
         source["cited"] = source["id"] in cited_ids
 
-    return {"answer": answer, "sources": sources}
+    return {"answer": answer, "sources": sources, "strategy": strategy}

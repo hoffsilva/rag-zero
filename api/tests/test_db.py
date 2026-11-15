@@ -126,3 +126,29 @@ async def test_search_orders_by_cosine_distance(connection):
     assert results[1]["score"] == pytest.approx(2 ** -0.5)  # 45 degrees: cos = 0.707
     assert results[0]["document"] == DOCUMENT
     assert results[0]["cited"] is False
+
+
+async def test_keyword_search_matches_french_word_forms(connection):
+    office = Chunk(id="MON-01-04", title="Coordonnées", text="Bureaux publiés à Sherbrooke et Boisbriand.", document=DOCUMENT)
+    nonprofits = Chunk(id="MON-05-01", title="Secteurs visés", text="Organismes sans but lucratif (OBNL) et commerce de détail.", document=DOCUMENT)
+    await db.replace_chunks(connection, [office, nonprofits], [unit_vector(0), unit_vector(1)], MODEL)
+
+    # "bureau" (singular) matches "Bureaux" through French stemming; short words like "où" are ignored.
+    results = await db.keyword_search(connection, "Où est le bureau ?", MODEL, top_k=5)
+    assert [r["id"] for r in results] == ["MON-01-04"]
+
+    results = await db.keyword_search(connection, "Travaillez-vous avec des OBNL ?", MODEL, top_k=5)
+    assert [r["id"] for r in results] == ["MON-05-01"]
+
+    assert await db.keyword_search(connection, "?", MODEL, top_k=5) == []
+
+
+async def test_search_with_embeddings_returns_the_stored_vectors(connection):
+    await db.replace_chunks(connection, [chunk("MON-01-01")], [unit_vector(3)], MODEL)
+
+    [(found, embedding)] = await db.search_with_embeddings(connection, unit_vector(3), MODEL, top_k=1)
+
+    assert found["id"] == "MON-01-01"
+    assert embedding[3] == pytest.approx(1.0)
+    assert len(embedding) == DIMENSIONS
+
