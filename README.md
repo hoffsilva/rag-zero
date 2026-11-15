@@ -62,6 +62,7 @@ web/
   components/ask-form.tsx Question UI, calls /api/ask
   data/evaluation.json    Saved evaluation results
 vercel.json               Services: /api/* → api, the rest → web
+.github/workflows/ci.yml  Tests, typecheck, lint and build on every PR
 ```
 
 ## Running locally
@@ -162,6 +163,10 @@ TEST_DATABASE_URL=postgresql://postgres:<password>@localhost:5433/postgres pytes
 - **Evaluation metrics**: hit rate, MRR, document hit rate and the false positive / negative counts on hand-made data.
 - **MCP tools**: `top_k` clamping and the shape of the search results.
 - **Postgres + pgvector** (integration): idempotent re-indexing, deleted sections removed, models coexisting, migration of the old single-column primary key, and results ordered by cosine distance with exact scores (1.0 and 0.707 on synthetic unit vectors). Each test runs in a temporary schema that is dropped afterwards, even when setup fails. They are skipped only when `TEST_DATABASE_URL` isn't set; with it set, a connection error fails the run instead of passing silently.
+
+### CI
+
+`.github/workflows/ci.yml` runs on every pull request and push to `main`: the full pytest suite against a `pgvector/pgvector:pg17` service container (so the database tests run too, with no OpenAI key), and the web app's typecheck, lint and production build.
 
 ## Deploying to Vercel
 
