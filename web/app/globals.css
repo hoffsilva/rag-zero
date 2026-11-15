@@ -1,26 +1,27 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/* Palette and type inspired by mondria.com (dark navy, ice text, orange accent). */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-navy: #031d2a;
+  --color-navy-raised: #0b2a39;
+  --color-ink: #dcf3f9;
+  --color-accent: #ff4200;
+  --color-accent-hover: #ff5c1f;
+  --font-sans: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-bricolage), ui-sans-serif, sans-serif;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), sans-serif;
+  background-color: var(--color-navy);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+/* Faint blueprint grid behind the hero. */
+.hero-grid {
+  background-image:
+    linear-gradient(to right, rgb(220 243 249 / 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(220 243 249 / 0.04) 1px, transparent 1px),
+    radial-gradient(ellipse at top, #0e3446 0%, var(--color-navy) 70%);
+  background-size: 64px 64px, 64px 64px, 100% 100%;
 }

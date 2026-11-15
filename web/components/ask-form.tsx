@@ -14,6 +14,10 @@ const EXAMPLES = [
 
 type Status = "idle" | "loading" | "error";
 
+function Eyebrow({ children }: { children: string }) {
+  return <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">{children}</p>;
+}
+
 export function AskForm() {
   const [question, setQuestion] = useState("");
   const [status, setStatus] = useState<Status>("idle");
@@ -50,59 +54,76 @@ export function AskForm() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row">
-        <input
-          value={question}
-          onChange={(event) => setQuestion(event.target.value)}
-          maxLength={MAX_QUESTION_LENGTH}
-          placeholder="Posez une question sur Mondria…"
-          className="flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-3 text-base outline-none focus:border-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-300"
-        />
-        <button
-          type="submit"
-          disabled={status === "loading" || !question.trim()}
-          className="rounded-lg bg-zinc-900 px-5 py-3 font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
+    <div className="flex flex-col gap-10">
+      <div className="flex flex-col gap-4">
+        <form
+          onSubmit={handleSubmit}
+          className="flex flex-col gap-3 rounded-2xl border border-ink/10 bg-navy-raised/95 p-3 shadow-[0_18px_50px_-28px_rgba(3,29,42,0.55)] sm:flex-row"
         >
-          {status === "loading" ? "Recherche…" : "Demander"}
-        </button>
-      </form>
-
-      <div className="flex flex-wrap gap-2">
-        {EXAMPLES.map((example) => (
+          <input
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            maxLength={MAX_QUESTION_LENGTH}
+            placeholder="Posez une question sur Mondria…"
+            className="flex-1 bg-transparent px-3 py-3 text-base text-ink outline-none placeholder:text-ink/40"
+          />
           <button
-            key={example}
-            type="button"
-            onClick={() => void ask(example)}
-            className="rounded-full border border-zinc-300 px-3 py-1 text-sm text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900"
+            type="submit"
+            disabled={status === "loading" || !question.trim()}
+            className="rounded-full bg-accent px-6 py-3 font-semibold text-white transition-colors hover:bg-accent-hover disabled:opacity-40"
           >
-            {example}
+            {status === "loading" ? "Recherche…" : "Demander →"}
           </button>
-        ))}
+        </form>
+
+        <div className="flex flex-wrap gap-2">
+          {EXAMPLES.map((example) => (
+            <button
+              key={example}
+              type="button"
+              onClick={() => void ask(example)}
+              className="rounded-full border border-ink/15 px-4 py-1.5 text-sm text-ink/75 transition-colors hover:border-ink/40 hover:text-ink"
+            >
+              {example}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {status === "error" && (
-        <p className="text-red-600 dark:text-red-400">Une erreur est survenue. Réessayez.</p>
-      )}
+      {status === "error" && <p className="text-accent">Une erreur est survenue. Réessayez.</p>}
 
       {result && (
-        <section className="flex flex-col gap-4">
-          <p className="whitespace-pre-line rounded-lg bg-zinc-100 p-4 leading-relaxed dark:bg-zinc-900">
-            {result.answer}
-          </p>
-          <div className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-              Sections récupérées
-            </h2>
-            {result.sources.map((source) => (
-              <details key={source.id} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
-                <summary className="cursor-pointer text-sm">
-                  <span className="font-mono">{source.id}</span> — {source.title}
-                  <span className="ml-2 text-zinc-500">score {source.score.toFixed(3)}</span>
-                </summary>
-                <p className="mt-2 whitespace-pre-line text-sm text-zinc-600 dark:text-zinc-400">{source.text}</p>
-              </details>
-            ))}
+        <section className="flex flex-col gap-8">
+          <div className="rounded-2xl border border-ink/10 bg-navy-raised/95 p-7">
+            <span className="block size-2 bg-accent" aria-hidden />
+            <div className="mt-4">
+              <Eyebrow>Réponse</Eyebrow>
+            </div>
+            <p className="mt-3 whitespace-pre-line text-lg leading-relaxed">{result.answer}</p>
+          </div>
+
+          <div className="flex flex-col gap-4">
+            <div>
+              <Eyebrow>Sources</Eyebrow>
+              <h2 className="mt-2 font-display text-3xl font-bold tracking-tight">Sections récupérées</h2>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {result.sources.map((source) => (
+                <details
+                  key={source.id}
+                  className="group rounded-2xl border border-ink/10 bg-navy-raised/95 p-6 transition-colors hover:border-ink/25"
+                >
+                  <summary className="flex cursor-pointer list-none flex-col gap-2">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-ink/60">
+                      {source.id} · score {source.score.toFixed(3)}
+                    </span>
+                    <span className="font-display text-xl font-bold">{source.title}</span>
+                    <span className="text-sm font-semibold group-open:hidden">Voir le texte →</span>
+                  </summary>
+                  <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-ink/75">{source.text}</p>
+                </details>
+              ))}
+            </div>
           </div>
         </section>
       )}
