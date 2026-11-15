@@ -18,7 +18,8 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg17
         env:
-          POSTGRES_PASSWORD: postgres
+          # Throwaway database reachable only inside the job: no password at all.
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 5432:5432
         options: >-
@@ -43,7 +44,7 @@ jobs:
       # pgvector integration tests against the service container above.
       - run: pytest -v
         env:
-          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          TEST_DATABASE_URL: postgresql://postgres@localhost:5432/postgres
 
   web:
     name: Web (typecheck, lint, build)
