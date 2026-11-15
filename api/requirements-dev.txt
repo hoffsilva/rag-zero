@@ -1,0 +1,2 @@
+# Local development only (not deployed): MCP server
+mcp==2.3.0
