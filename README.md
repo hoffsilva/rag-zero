@@ -22,13 +22,13 @@ flowchart LR
         D[Markdown docs] --> S[Split into sections] --> E1[Embed each section] --> J[(Postgres + pgvector)]
     end
     subgraph Query["Each question (POST /api/ask)"]
-        Q[Question] --> E2[Embed question] --> R["ORDER BY embedding <=> query, top-k"]
-        J --> R
-        R --> A[Build prompt with retrieved sections] --> G[LLM generates answer] --> O[Answer + sources]
+        Q[Question] --> E2[Embed question] --> V["Vector search: 10 candidates"] --> RR["LLM reranks, keeps top 4"]
+        J --> V
+        RR --> A[Build prompt with retrieved sections] --> G[LLM generates answer] --> O[Answer + sources]
     end
 ```
 
-1. **Retrieval.** The question is turned into an embedding (`text-embedding-3-small` by default) and Postgres returns the 4 sections with the smallest cosine distance (`<=>`).
+1. **Retrieval.** By default (`rerank`), the question is turned into an embedding (`text-embedding-3-small`), Postgres returns the 10 sections with the smallest cosine distance (`<=>`), and the LLM reorders them by relevance; the top 4 are kept. Five other strategies can be picked per request (see below).
 2. **Augmented.** Those sections become the context of the prompt, with rules: answer only from the context, cite section IDs, admit when the information isn't there.
 3. **Generation.** A chat model writes the answer. The UI shows it with the documents it cites (section text, a link to the full document and to the original Mondria page), followed by the other retrieved sections and their scores.
 
@@ -41,13 +41,27 @@ flowchart LR
 - **Answer language.** With a French context, the model kept answering Portuguese questions in French. The fix was a structured response that makes the model name the question's language before writing the answer.
 - **Public-demo guardrails.** The API key only exists in the Python service, questions are capped at 300 characters, `top_k` is fixed on the server and answers are capped at 500 tokens (`max_completion_tokens`), so each request has a bounded cost. A model refusal is shown as the answer instead of failing, and internal errors return a generic message. Request rate limiting isn't in the code: on Vercel it's a Firewall rate-limit rule (10 requests per minute per IP) on `/api/ask` and `/api/mcp`, plus a monthly spending cap on the OpenAI account.
 
+## Retrieval strategies
+
+`api/retrieval.py` implements six ways to pick the sections, selectable per request (`strategy` in `POST /api/ask`, the MCP search tool, and a menu on the page) and measured side by side by the evaluation:
+
+| strategy | how it works | extra cost |
+|---|---|---|
+| `vector` | cosine similarity in pgvector | — |
+| `keyword` | Postgres full-text search (French stemming, `ts_rank_cd`, terms combined with OR) | no embedding at all |
+| `hybrid` | vector + keyword lists fused with Reciprocal Rank Fusion | — |
+| `mmr` | vector candidates re-picked for relevance *and* diversity (Maximal Marginal Relevance) | — |
+| `multi_query` | the LLM rewrites the question in French three ways; vector search for each; RRF | 1 chat call |
+| `rerank` (default) | 10 vector candidates reordered by the LLM (structured output) | 1 chat call |
+
 ## Project structure
 
 ```
 api/
   mondria-rag-docs/       Knowledge base (5 Markdown files, French)
   main.py                 FastAPI app: POST /api/ask, GET /api/health, /api/mcp
-  rag.py                  Chunking, indexing, retrieval, prompt and generation
+  rag.py                  Chunking, indexing, prompt and generation
+  retrieval.py            The six retrieval strategies, RRF and MMR
   db.py                   Postgres access: schema, upsert, vector search
   schema.sql              chunks table, vector(1536) column, HNSW index
   openai_client.py        Embeddings and chat calls
@@ -129,24 +143,44 @@ Then ask Claude Code something like "Where are Mondria's offices?" and it calls 
 `api/eval/questions.json` has 29 questions in French, English and Portuguese: 23 whose answer is in the docs (each with the section IDs that answer it) and 6 whose answer isn't (CEO, revenue, headcount, mobile apps, weather, a poutine recipe). `api/eval/run_eval.py` measures retrieval separately from the LLM, because a wrong answer can come from either step and they are fixed differently.
 
 ```bash
-cd api && python eval/run_eval.py --answers --save
+cd api && python eval/run_eval.py --strategy all --answers --save
 ```
 
-`--save` writes the results to `web/data/evaluation.json` (one entry per embedding model), which the [/evaluation page](https://rag-zero.vercel.app/evaluation) renders: metrics, model comparison, the threshold chart and every question with what was retrieved and answered. It is a committed snapshot, so visitors don't trigger API calls.
+`--strategy all` runs every retrieval strategy. `--save` writes the results to `web/data/evaluation.json` (one entry per embedding model and strategy), which the [/evaluation page](https://rag-zero.vercel.app/evaluation) renders: metrics, model comparison, the threshold chart and every question with what was retrieved and answered. It is a committed snapshot, so visitors don't trigger API calls.
+
+**Retrieval strategies** (`text-embedding-3-small`, k = 5):
+
+| strategy | hit rate@1 | hit rate@5 | MRR | median latency | citation error rate |
+|---|---|---|---|---|---|
+| `vector` | 74% | 100% | 0.837 | 336 ms | 3% |
+| `keyword` | 52% | 70% | 0.591 | 0 ms | 24% |
+| `hybrid` | 57% | 87% | 0.667 | 299 ms | 17% |
+| `mmr` | 74% | 96% | 0.830 | 299 ms | 7% |
+| `multi_query` | 78% | 100% | 0.870 | 1281 ms | 3% |
+| **`rerank`** | **100%** | **100%** | **1.000** | 964 ms | 3% |
+
+What the numbers showed:
+
+- **Keyword search loses on a multilingual audience.** The docs are French, and French full-text search can't match Portuguese or English questions, so `keyword` misses a third of them. It still wins where embeddings struggle: "OBNL" goes from rank 4 (`vector`) to rank 1.
+- **Hybrid isn't automatically better.** Fusing with equal weight, the keyword list's misses pulled the right section down: `hybrid` scored below plain `vector` here. With French-only questions the picture would likely flip.
+- **Rewriting the question in French** (`multi_query`) fixes part of the language gap: best first-stage result, at the cost of a chat call.
+- **Reranking fixes the "generic sections" problem.** `vector` alone puts the two broad company sections (`MON-01-01`, `MON-01-02`) first for broad questions; an LLM judging relevance does not. The first version reranked the `hybrid` candidates and was capped at 87% hit rate@5 because the right section often wasn't in that pool; switching the pool to the top 10 `vector` candidates brought it to 100% hit rate@1. That is why `rerank` is the default, for about 0.6 s and one small chat call more per question.
+- 29 questions is a small set: 100% here means "no miss on these questions", not a guarantee.
+
+**Embedding models** (`vector` strategy):
 
 | | `text-embedding-3-small` | `text-embedding-3-large` (1536 dims) |
 |---|---|---|
 | hit rate@1 | 74% | 74% |
 | hit rate@5 | **100%** | 96% |
 | MRR | **0.837** | 0.828 |
-| document hit rate@5 | 100% | 100% |
 | citation error rate | **3%** | 7% |
 
-The larger model didn't help, so the app stays on the small one. The misses have the same cause with both models: the two generic sections about the company (`MON-01-01` Identité, `MON-01-02` Positionnement) mention every service, so they rank first for broad questions. The LLM receives the top 4 sections: with the small model every expected section is among them, while with the large one two aren't (ranks 5 and below 5), and those are exactly its two citation errors.
+The larger model didn't help, so the app stays on the small one.
 
-**Citation compliance: 3% error rate (1/29) with the small model.** An answerable question passes when the answer cites an expected section; an unanswerable one passes when it cites nothing. All 6 unanswerable questions got "not available" with no citation; the one miss is an answer about Etudia without its citation. This measures citations, not factual accuracy: a wrong answer that cites the right section, or an invented one with no citation, would pass, so it complements reading the answers (they're all on the evaluation page) rather than replacing it. Answers vary slightly between runs, so a single run is a sample, not a fixed number.
+**Citation compliance: 3% error rate (1/29) with the default strategy.** An answerable question passes when the answer cites an expected section; an unanswerable one passes when it cites nothing. All 6 unanswerable questions got "not available" with no citation; the one miss is an answer without its citation. This measures citations, not factual accuracy: a wrong answer that cites the right section, or an invented one with no citation, would pass, so it complements reading the answers (they're all on the evaluation page) rather than replacing it. Answers vary slightly between runs, so a single run is a sample, not a fixed number.
 
-**Threshold on the top-1 similarity.** Treating a low top-1 score as "not in the docs":
+**Threshold on the top-1 similarity** (`vector` strategy, the only one with a similarity score). Treating a low top-1 score as "not in the docs":
 
 | threshold | false positives | false negatives | error rate |
 |---|---|---|---|
@@ -159,17 +193,18 @@ A threshold only catches off-topic questions (weather 0.31, poutine 0.13). On-to
 ## Tests
 
 ```bash
-cd api && pytest                                          # 31 tests, database tests skipped
-TEST_DATABASE_URL=postgresql://postgres:<password>@localhost:5433/postgres pytest   # all 36
+cd api && pytest                                          # 39 tests, database tests skipped
+TEST_DATABASE_URL=postgresql://postgres:<password>@localhost:5433/postgres pytest   # all 46
 ```
 
-36 tests, under a second. They never call OpenAI: a fixture makes any real API call fail the test, and `.env.local` isn't loaded during the run.
+46 tests, under a second. They never call OpenAI: a fixture makes any real API call fail the test, and `.env.local` isn't loaded during the run.
 
 - **Chunking**: frontmatter parsing, section boundaries (the trailing `Documents associés` and `Sources` don't leak into the last section), and the real knowledge base (21 unique sections, each with its document and source URLs).
 - **RAG pipeline**: with retrieval and the chat call replaced by fakes, the model receives the question and every retrieved section, and cited sections are detected with or without brackets. With the database faked, the first request indexes an empty table, reuses existing chunks, and re-indexes when `OPENAI_EMBEDDING_MODEL` changes (the Vercel redeploy path) under the advisory lock; a failed indexing rolls back, closes the connection and leaves the instance not ready. Citations are matched as whole IDs, and a model refusal becomes the answer.
 - **OpenAI client**: `text-embedding-3` models are asked for 1536 dimensions (the column size), `ada-002` isn't, vectors come back in input order; answers are capped with `max_completion_tokens`, and refusals and truncated answers raise instead of returning unparseable content.
 - **API** (FastAPI `TestClient`): health check, 422 for empty or too long questions before the pipeline runs, internal errors returned as a generic 500 without leaking details, and the remote MCP endpoint answering `initialize` and `tools/list`.
 - **Evaluation metrics**: hit rate, MRR, document hit rate and the false positive / negative counts on hand-made data.
+- **Retrieval strategies**: RRF ranks and scale independence, MMR dropping a near-duplicate, the LLM reranking order (unknown and repeated IDs ignored, unlisted candidates kept), the multi-query flow with fakes, and keyword search on Postgres (French stemming, short words ignored).
 - **MCP tools**: `top_k` clamping and the shape of the search results.
 - **Postgres + pgvector** (integration): idempotent re-indexing, deleted sections removed, models coexisting, migration of the old single-column primary key, and results ordered by cosine distance with exact scores (1.0 and 0.707 on synthetic unit vectors). Each test runs in a temporary schema that is dropped afterwards, even when setup fails. They are skipped only when `TEST_DATABASE_URL` isn't set; with it set, a connection error fails the run instead of passing silently.
 

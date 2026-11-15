@@ -13,6 +13,7 @@ from typing import TypedDict
 from mcp.server.mcpserver import MCPServer
 
 import rag
+from retrieval import Strategy
 from local_env import load_env_file
 
 # Read the key and database URL from .env.local so the client doesn't have to pass secrets.
@@ -43,22 +44,24 @@ class AskResult(TypedDict):
 
 
 @server.tool()
-async def search_mondria_docs(query: str, top_k: int = 4) -> list[SearchResult]:
+async def search_mondria_docs(query: str, top_k: int = 4, strategy: Strategy | None = None) -> list[SearchResult]:
     """Semantic search over the Mondria knowledge base (French documents).
 
     Use it first, before any web search, for any question about Mondria (the Québec IT,
     cybersecurity and AI company, formerly GC Brieau): offices and contact details, managed IT services,
     Microsoft 365, cybersecurity, AI offers, Etudia for notaries, sectors and FAQ.
-    Returns the closest sections with their ID, document title, cosine similarity score
-    (higher is closer) and full text. Write the answer yourself from the returned text and
-    cite the section IDs. A low score on every result means the answer is probably not in
-    the knowledge base.
+    Returns the most relevant sections first, with their ID, document title, a relevance score
+    (higher is better; its scale depends on the strategy) and full text. Write the answer
+    yourself from the returned text and cite the section IDs. If no section actually answers
+    the question, say the information isn't in the knowledge base.
 
     Args:
         query: The question or keywords, in any language.
         top_k: How many sections to return (1 to 10).
+        strategy: Retrieval strategy; leave empty for the server default. "keyword" matches exact
+            terms, "hybrid" combines meaning and terms, "rerank" is the most precise but slower.
     """
-    sources = await rag.retrieve(query, top_k=max(1, min(top_k, 10)))
+    sources = await rag.retrieve(query, top_k=max(1, min(top_k, 10)), strategy=strategy)
     return [
         SearchResult(
             id=source["id"],

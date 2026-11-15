@@ -7,6 +7,7 @@ client = TestClient(main.app)
 
 ANSWER = {
     "answer": "Deux bureaux [MON-01-04].",
+    "strategy": "vector",
     "sources": [
         {
             "id": "MON-01-04",
@@ -31,7 +32,7 @@ def test_health():
 def test_ask_rejects_empty_or_too_long_questions(question, monkeypatch):
     calls = []
 
-    async def pipeline_must_not_run(question: str):
+    async def pipeline_must_not_run(question: str, strategy=None):
         calls.append(question)
         return ANSWER
 
@@ -46,21 +47,34 @@ def test_ask_rejects_empty_or_too_long_questions(question, monkeypatch):
 def test_ask_returns_the_answer_and_sources(monkeypatch):
     received = {}
 
-    async def fake_answer(question: str):
+    async def fake_answer(question: str, strategy=None):
         received["question"] = question
+        received["strategy"] = strategy
         return ANSWER
 
     monkeypatch.setattr(main, "answer_question", fake_answer)
 
-    response = client.post("/api/ask", json={"question": "  Où sont les bureaux ?  "})
+    response = client.post("/api/ask", json={"question": "  Où sont les bureaux ?  ", "strategy": "hybrid"})
 
     assert response.status_code == 200
     assert response.json() == ANSWER
     assert received["question"] == "Où sont les bureaux ?"  # stripped before the pipeline
+    assert received["strategy"] == "hybrid"
+
+
+def test_ask_rejects_an_unknown_strategy(monkeypatch):
+    async def pipeline_must_not_run(question: str, strategy=None):
+        raise AssertionError("pipeline ran")
+
+    monkeypatch.setattr(main, "answer_question", pipeline_must_not_run)
+
+    response = client.post("/api/ask", json={"question": "Bonjour", "strategy": "bm25"})
+
+    assert response.status_code == 422
 
 
 def test_ask_hides_internal_errors(monkeypatch):
-    async def failing_answer(question: str):
+    async def failing_answer(question: str, strategy=None):
         raise RuntimeError("OpenAI /embeddings failed (401): secret details")
 
     monkeypatch.setattr(main, "answer_question", failing_answer)

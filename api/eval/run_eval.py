@@ -20,13 +20,14 @@ Answers (--answers, one chat call per question) — citation compliance, not fac
 which the /evaluation page of the web app renders.
 
 Run from api/ (uses .env.local and the configured database and embedding model):
-    python eval/run_eval.py [--k 5] [--answers] [--save]
+    python eval/run_eval.py [--k 5] [--strategy NAME|all] [--answers] [--save]
 """
 
 import argparse
 import asyncio
 import json
 import sys
+import time
 from datetime import date
 from pathlib import Path
 from typing import TypedDict
@@ -37,9 +38,9 @@ from local_env import load_env_file  # noqa: E402
 
 load_env_file()
 
-import db  # noqa: E402
 import rag  # noqa: E402
-from openai_client import chat_model, embed, embedding_model  # noqa: E402
+import retrieval  # noqa: E402
+from openai_client import chat_model, embedding_model  # noqa: E402
 
 QUESTIONS_FILE = Path(__file__).parent / "questions.json"
 RESULTS_FILE = Path(__file__).resolve().parents[2] / "web" / "data" / "evaluation.json"
@@ -61,6 +62,7 @@ class QuestionResult(TypedDict, total=False):
     expected: list[str]
     retrieved: list[Retrieved]
     rank: int | None
+    latency_ms: float
     answer: str
     answer_sources: list[str]
     cited: list[str]
@@ -75,24 +77,29 @@ def first_hit_rank(expected: list[str], ids: list[str]) -> int | None:
     return next((rank for rank, section in enumerate(ids, start=1) if section in expected), None)
 
 
-async def retrieve_all(cases: list[Case], k: int) -> list[QuestionResult]:
+async def retrieve_all(cases: list[Case], k: int, strategy: retrieval.Strategy) -> list[QuestionResult]:
+    """Runs the app's own retrieval for each question and times it (embedding, database and,
+    for multi_query/rerank, the extra LLM call)."""
     model = embedding_model()
-    embeddings = await embed([case["question"] for case in cases], model)  # one batch call
     results: list[QuestionResult] = []
     async with await rag.open_connection() as connection:
-        for case, embedding in zip(cases, embeddings):
-            sources = await db.search(connection, embedding, model, k)
+        for case in cases:
+            started = time.perf_counter()
+            sources = await retrieval.run(strategy, connection, case["question"], model, k)
+            latency_ms = (time.perf_counter() - started) * 1000
             ids = [source["id"] for source in sources]
             results.append(QuestionResult(
                 question=case["question"],
                 expected=case["expected"],
                 retrieved=[Retrieved(id=s["id"], score=round(s["score"], 4)) for s in sources],
                 rank=first_hit_rank(case["expected"], ids) if case["expected"] else None,
+                latency_ms=round(latency_ms),
             ))
     return results
 
 
 def retrieval_metrics(results: list[QuestionResult]) -> dict:
+    latencies = sorted(r["latency_ms"] for r in results)
     answerable = [r for r in results if r["expected"]]
     n = len(answerable)
     doc_hits = [
@@ -105,6 +112,7 @@ def retrieval_metrics(results: list[QuestionResult]) -> dict:
         "hit_rate_at_k": sum(r["rank"] is not None for r in answerable) / n,
         "mrr": sum(1 / r["rank"] for r in answerable if r["rank"]) / n,
         "document_hit_rate_at_k": sum(doc_hits) / n,
+        "latency_ms_median": latencies[len(latencies) // 2],
     }
 
 
@@ -135,9 +143,9 @@ def threshold_metrics(results: list[QuestionResult]) -> dict:
     }
 
 
-async def evaluate_answers(results: list[QuestionResult]) -> dict:
+async def evaluate_answers(results: list[QuestionResult], strategy: retrieval.Strategy) -> dict:
     for result in results:
-        answer = await rag.answer_question(result["question"])
+        answer = await rag.answer_question(result["question"], strategy)
         cited = [source["id"] for source in answer["sources"] if source["cited"]]
         result["answer"] = answer["answer"]
         result["answer_sources"] = [source["id"] for source in answer["sources"]]
@@ -157,12 +165,13 @@ async def evaluate_answers(results: list[QuestionResult]) -> dict:
 
 def print_report(report: dict) -> None:
     retrieval, threshold, k = report["retrieval"], report["threshold"], report["k"]
-    print(f"# Evaluation — embedding model {report['embedding_model']}, {len(report['questions'])} questions")
+    print(f"# Evaluation — {report['embedding_model']}, strategy {report['strategy']}, {len(report['questions'])} questions")
     print(f"\n## Retrieval ({retrieval['answerable']} answerable questions, k={k})")
     print(f"hit rate@1:          {retrieval['hit_rate_at_1']:.0%}")
     print(f"hit rate@{k}:          {retrieval['hit_rate_at_k']:.0%}")
     print(f"MRR:                 {retrieval['mrr']:.3f}")
     print(f"document hit rate@{k}: {retrieval['document_hit_rate_at_k']:.0%}")
+    print(f"median latency:      {retrieval['latency_ms_median']} ms")
     misses = [q for q in report["questions"] if q["expected"] and q["rank"] != 1]
     if misses:
         print("\nNot ranked first:")
@@ -171,13 +180,14 @@ def print_report(report: dict) -> None:
             where = f"rank {q['rank']}" if q["rank"] else f"not in top {k}"
             print(f"  - {q['question']}\n    expected {q['expected']} ({where}); got {got}")
 
-    print("\n## Threshold on the top-1 similarity")
-    print(f"answerable top-1:   min {threshold['answerable_top1']['min']:.3f}  max {threshold['answerable_top1']['max']:.3f}")
-    print(f"unanswerable top-1: min {threshold['unanswerable_top1']['min']:.3f}  max {threshold['unanswerable_top1']['max']:.3f}")
-    print("\nthreshold  FP  FN  error rate")
-    for row in threshold["rows"] + [threshold["best"]]:
-        marker = "  <- best" if row is threshold["best"] else ""
-        print(f"  {row['threshold']:.3f}    {row['false_positives']:>2}  {row['false_negatives']:>2}  {row['error_rate']:.0%}{marker}")
+    if threshold is not None:
+        print("\n## Threshold on the top-1 similarity")
+        print(f"answerable top-1:   min {threshold['answerable_top1']['min']:.3f}  max {threshold['answerable_top1']['max']:.3f}")
+        print(f"unanswerable top-1: min {threshold['unanswerable_top1']['min']:.3f}  max {threshold['unanswerable_top1']['max']:.3f}")
+        print("\nthreshold  FP  FN  error rate")
+        for row in threshold["rows"] + [threshold["best"]]:
+            marker = "  <- best" if row is threshold["best"] else ""
+            print(f"  {row['threshold']:.3f}    {row['false_positives']:>2}  {row['false_negatives']:>2}  {row['error_rate']:.0%}{marker}")
 
     answers = report.get("answers")
     if answers:
@@ -192,36 +202,55 @@ def print_report(report: dict) -> None:
                 print(f"  - {q['question']}\n    expected {q['expected'] or 'no citation'}; cited {q['cited'] or 'nothing'}\n    {q['answer']}")
 
 
+def run_key(report: dict) -> str:
+    return f"{report['embedding_model']}|{report['strategy']}"
+
+
 def save_report(report: dict) -> None:
-    """Keeps one entry per embedding model, so the page can compare them."""
+    """Keeps one entry per (embedding model, strategy), so the page can compare them."""
     data = json.loads(RESULTS_FILE.read_text(encoding="utf-8")) if RESULTS_FILE.exists() else {"runs": {}}
-    data["runs"][report["embedding_model"]] = report
+    data["runs"][run_key(report)] = report
+    data["default_strategy"] = retrieval.default_strategy()
     RESULTS_FILE.parent.mkdir(parents=True, exist_ok=True)
     RESULTS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"\nSaved to {RESULTS_FILE.relative_to(RESULTS_FILE.parents[2])}")
 
 
+async def evaluate(cases: list[Case], k: int, strategy: retrieval.Strategy, answers: bool) -> dict:
+    results = await retrieve_all(cases, k, strategy)
+    return {
+        "embedding_model": embedding_model(),
+        "strategy": strategy,
+        "date": date.today().isoformat(),
+        "k": k,
+        "retrieval": retrieval_metrics(results),
+        # Only the vector strategy has a similarity score a threshold can be put on.
+        "threshold": threshold_metrics(results) if strategy == "vector" else None,
+        "answers": await evaluate_answers(results, strategy) if answers else None,
+        "questions": results,
+    }
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--k", type=int, default=5)
+    parser.add_argument(
+        "--strategy",
+        choices=[*retrieval.STRATEGIES, "all"],
+        default=None,
+        help="retrieval strategy to evaluate (default: RETRIEVAL_STRATEGY), or all of them",
+    )
     parser.add_argument("--answers", action="store_true", help="also evaluate the generated answers")
     parser.add_argument("--save", action="store_true", help=f"write the results to {RESULTS_FILE.name}")
     args = parser.parse_args()
 
     cases: list[Case] = json.loads(QUESTIONS_FILE.read_text(encoding="utf-8"))["questions"]
-    results = await retrieve_all(cases, args.k)
-    report = {
-        "embedding_model": embedding_model(),
-        "date": date.today().isoformat(),
-        "k": args.k,
-        "retrieval": retrieval_metrics(results),
-        "threshold": threshold_metrics(results),
-        "answers": await evaluate_answers(results) if args.answers else None,
-        "questions": results,
-    }
-    print_report(report)
-    if args.save:
-        save_report(report)
+    strategies = retrieval.STRATEGIES if args.strategy == "all" else [args.strategy or retrieval.default_strategy()]
+    for strategy in strategies:
+        report = await evaluate(cases, args.k, strategy, args.answers)
+        print_report(report)
+        if args.save:
+            save_report(report)
 
 
 if __name__ == "__main__":

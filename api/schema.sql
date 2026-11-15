@@ -34,6 +34,12 @@ BEGIN
 END
 $$;
 
+-- Full-text search for the keyword and hybrid strategies: a French tsvector kept up to date by
+-- Postgres itself (generated column), with a GIN index.
+ALTER TABLE chunks ADD COLUMN IF NOT EXISTS content_tsv tsvector
+    GENERATED ALWAYS AS (to_tsvector('french', title || ' ' || content)) STORED;
+CREATE INDEX IF NOT EXISTS chunks_content_tsv_gin ON chunks USING gin (content_tsv);
+
 -- Approximate nearest-neighbour index for cosine distance (the <=> operator).
 -- Pointless for 21 rows, but it is what keeps the search fast at millions of rows.
 CREATE INDEX IF NOT EXISTS chunks_embedding_hnsw ON chunks USING hnsw (embedding vector_cosine_ops);

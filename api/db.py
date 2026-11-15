@@ -95,18 +95,41 @@ async def replace_chunks(
             )
 
 
+COLUMNS = "id, title, content, document_id, document_title, document_file, source_urls"
+
+
+def _scored(row: tuple, score: float) -> ScoredChunk:
+    return ScoredChunk(
+        id=row[0],
+        title=row[1],
+        text=row[2],
+        document=Document(id=row[3], title=row[4], file=row[5], source_urls=row[6]),
+        score=score,
+        cited=False,
+    )
+
+
 async def search(
     connection: psycopg.AsyncConnection,
     query_embedding: list[float],
     model: str,
     top_k: int,
 ) -> list[ScoredChunk]:
-    # <=> is cosine distance (0 = same direction), so the closest chunks come first with ASC.
-    # The score shown to users is the cosine similarity, 1 - distance.
+    """Vector search. <=> is cosine distance (0 = same direction), so the closest chunks come
+    first with ASC; the score shown to users is the cosine similarity, 1 - distance."""
+    return [chunk for chunk, _ in await search_with_embeddings(connection, query_embedding, model, top_k)]
+
+
+async def search_with_embeddings(
+    connection: psycopg.AsyncConnection,
+    query_embedding: list[float],
+    model: str,
+    top_k: int,
+) -> list[tuple[ScoredChunk, list[float]]]:
+    """Vector search that also returns each candidate's embedding (MMR needs them)."""
     cursor = await connection.execute(
-        """
-        SELECT id, title, content, document_id, document_title, document_file, source_urls,
-               1 - (embedding <=> %(query)s) AS score
+        f"""
+        SELECT {COLUMNS}, 1 - (embedding <=> %(query)s) AS score, embedding
         FROM chunks
         WHERE embedding_model = %(model)s
         ORDER BY embedding <=> %(query)s
@@ -114,14 +137,33 @@ async def search(
         """,
         {"query": Vector(query_embedding), "model": model, "top_k": top_k},
     )
-    return [
-        ScoredChunk(
-            id=row[0],
-            title=row[1],
-            text=row[2],
-            document=Document(id=row[3], title=row[4], file=row[5], source_urls=row[6]),
-            score=float(row[7]),
-            cited=False,
+    return [(_scored(row, float(row[7])), row[8].to_list()) for row in await cursor.fetchall()]
+
+
+async def keyword_search(
+    connection: psycopg.AsyncConnection,
+    question: str,
+    model: str,
+    top_k: int,
+) -> list[ScoredChunk]:
+    """Full-text search with the French configuration (stemming, stop words). The question's
+    lexemes are combined with OR, so a chunk doesn't need every word to match; very short
+    lexemes ("où", "le") are dropped because they match almost every chunk. ts_rank_cd with
+    normalization 1 ranks chunks with more and closer matches higher, damped by chunk length.
+    Filtering on the embedding model keeps one row per section when several models coexist."""
+    cursor = await connection.execute(
+        f"""
+        WITH q AS (
+            SELECT string_agg(quote_literal(lexeme), ' | ')::tsquery AS query
+            FROM unnest(tsvector_to_array(to_tsvector('french', %(question)s))) AS lexeme
+            WHERE length(lexeme) > 2
         )
-        for row in await cursor.fetchall()
-    ]
+        SELECT {COLUMNS}, ts_rank_cd(content_tsv, q.query, 1) AS score
+        FROM chunks, q
+        WHERE embedding_model = %(model)s AND content_tsv @@ q.query
+        ORDER BY score DESC, id
+        LIMIT %(top_k)s
+        """,
+        {"question": question, "model": model, "top_k": top_k},
+    )
+    return [_scored(row, float(row[7])) for row in await cursor.fetchall()]

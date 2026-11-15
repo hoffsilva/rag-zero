@@ -20,7 +20,7 @@ def model_answers(monkeypatch):
     and returns a dict that records what the chat call received."""
     received: dict = {}
 
-    async def fake_retrieve(question: str, top_k: int = rag.TOP_K):
+    async def fake_retrieve(question: str, top_k: int = rag.TOP_K, strategy=None):
         return [source("MON-01-04", 0.6), source("MON-01-02", 0.4), source("MON-02-04", 0.3)]
 
     def set_answer(answer: str) -> dict:
@@ -191,7 +191,7 @@ async def test_citations_are_matched_as_whole_ids(model_answers):
 
 @pytest.mark.anyio
 async def test_a_model_refusal_is_returned_as_the_answer(monkeypatch):
-    async def fake_retrieve(question: str, top_k: int = rag.TOP_K):
+    async def fake_retrieve(question: str, top_k: int = rag.TOP_K, strategy=None):
         return [source("MON-01-04")]
 
     async def refusing_chat(messages, json_schema=None):
