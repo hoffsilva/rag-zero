@@ -7,28 +7,15 @@ Register it in Claude Code:
     claude mcp add mondria-rag -- <repo>/.venv/bin/python <repo>/api/mcp_server.py
 """
 
-import os
-from pathlib import Path
 from typing import TypedDict
 
 from mcp.server.mcpserver import MCPServer
 
 import rag
+from local_env import load_env_file
 
-
-def load_env_file(path: Path) -> None:
-    """Loads KEY=VALUE lines from .env.local so the client doesn't have to pass secrets.
-    Variables already set in the environment win."""
-    if not path.exists():
-        return
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            key, value = line.split("=", 1)
-            os.environ.setdefault(key.strip(), value.strip())
-
-
-load_env_file(Path(__file__).parent / ".env.local")
+# Read the key and database URL from .env.local so the client doesn't have to pass secrets.
+load_env_file()
 
 server = MCPServer(
     name="mondria-rag",

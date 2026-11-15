@@ -53,6 +53,8 @@ api/
   openai_client.py        Embeddings and chat calls
   build_index.py          Indexes the docs into Postgres (idempotent)
   mcp_server.py           MCP server (stdio): search_mondria_docs, ask_mondria
+  eval/questions.json     Evaluation set (29 questions)
+  eval/run_eval.py        Hit rate, MRR, threshold FP/FN, answer error rate
 web/
   app/page.tsx            Page
   components/ask-form.tsx Question UI, calls /api/ask
@@ -108,6 +110,35 @@ claude mcp add mondria-rag -- "$PWD/.venv/bin/python" "$PWD/api/mcp_server.py"
 ```
 
 Then ask Claude Code something like "Where are Mondria's offices?" and it calls `search_mondria_docs`.
+
+## Evaluation
+
+`api/eval/questions.json` has 29 questions in French, English and Portuguese: 23 whose answer is in the docs (each with the section IDs that answer it) and 6 whose answer isn't (CEO, revenue, headcount, mobile apps, weather, a poutine recipe). `api/eval/run_eval.py` measures retrieval separately from the LLM, because a wrong answer can come from either step and they are fixed differently.
+
+```bash
+cd api && python eval/run_eval.py --answers
+```
+
+| | `text-embedding-3-small` | `text-embedding-3-large` (1536 dims) |
+|---|---|---|
+| hit rate@1 | 74% | 74% |
+| hit rate@5 | **100%** | 96% |
+| MRR | **0.837** | 0.828 |
+| document hit rate@5 | 100% | 100% |
+
+The larger model didn't help, so the app stays on the small one. The misses have the same cause with both models: the two generic sections about the company (`MON-01-01` Identité, `MON-01-02` Positionnement) mention every service, so they rank first for broad questions. With k=4 the right section is still in the context, which is why the answers are right.
+
+**Answers: 0% error rate (0/29).** Every answerable question cites an expected section, and all 6 unanswerable ones get "not available" with no citation.
+
+**Threshold on the top-1 similarity.** Treating a low top-1 score as "not in the docs":
+
+| threshold | false positives | false negatives | error rate |
+|---|---|---|---|
+| 0.30 | 5 | 0 | 17% |
+| 0.35 | 4 | 0 | 14% |
+| 0.45 | 2 | 5 | 24% |
+
+A threshold only catches off-topic questions (weather 0.31, poutine 0.13). On-topic questions without an answer in the docs (CEO 0.53, headcount 0.53) score like answerable ones (lowest 0.40), so no threshold separates them: the LLM's "answer only from the context" rule is what refuses them. A threshold around 0.35 would still be useful as a cheap filter that skips the chat call for off-topic questions, with no false negatives on this set.
 
 ## Deploying to Vercel
 
