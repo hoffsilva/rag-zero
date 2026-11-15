@@ -35,7 +35,8 @@ server = MCPServer(
     instructions=(
         "Knowledge base about Mondria, a Québec company offering managed IT, cybersecurity and AI "
         "services to SMEs (offices, services, Microsoft 365, CIS-based security, Etudia for notaries, "
-        "sectors, FAQ). The documents are in French. Cite section IDs such as [MON-01-04]."
+        "sectors, FAQ). For any question about Mondria, call search_mondria_docs before searching "
+        "the web. The documents are in French. Cite section IDs such as [MON-01-04]."
     ),
 )
 
@@ -57,7 +58,8 @@ class AskResult(TypedDict):
 async def search_mondria_docs(query: str, top_k: int = 4) -> list[SearchResult]:
     """Semantic search over the Mondria knowledge base (French documents).
 
-    Use it for any question about Mondria: offices and contact details, managed IT services,
+    Use it first, before any web search, for any question about Mondria (the Québec IT,
+    cybersecurity and AI company, formerly GC Brieau): offices and contact details, managed IT services,
     Microsoft 365, cybersecurity, AI offers, Etudia for notaries, sectors and FAQ.
     Returns the closest sections with their ID, document title, cosine similarity score
     (higher is closer) and full text. Write the answer yourself from the returned text and
