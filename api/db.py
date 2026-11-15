@@ -4,8 +4,8 @@ import os
 from pathlib import Path
 from typing import TypedDict
 
-import numpy as np
 import psycopg
+from pgvector import Vector
 from pgvector.psycopg import register_vector_async
 
 SCHEMA_FILE = Path(__file__).parent / "schema.sql"
@@ -85,7 +85,7 @@ async def replace_chunks(
                         chunk["document"]["file"],
                         chunk["document"]["source_urls"],
                         model,
-                        np.array(embedding),
+                        Vector(embedding),
                     )
                     for chunk, embedding in zip(chunks, embeddings)
                 ],
@@ -113,7 +113,7 @@ async def search(
         ORDER BY embedding <=> %(query)s
         LIMIT %(top_k)s
         """,
-        {"query": np.array(query_embedding), "model": model, "top_k": top_k},
+        {"query": Vector(query_embedding), "model": model, "top_k": top_k},
     )
     return [
         ScoredChunk(
