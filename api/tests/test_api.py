@@ -70,3 +70,30 @@ def test_ask_hides_internal_errors(monkeypatch):
     assert response.status_code == 500
     assert response.json() == {"detail": "Could not answer the question"}
     assert "secret" not in response.text
+
+
+MCP_HEADERS = {"Accept": "application/json, text/event-stream"}
+
+
+def mcp_request(client: TestClient, method: str, params: dict | None = None) -> dict:
+    response = client.post(
+        "/api/mcp",
+        json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}},
+        headers=MCP_HEADERS,
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["result"]
+
+
+def test_remote_mcp_endpoint_lists_the_tools():
+    # Entering the client runs the lifespan that starts the MCP session manager, as Vercel does.
+    with TestClient(main.app) as mcp_client:
+        init = mcp_request(
+            mcp_client,
+            "initialize",
+            {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "test", "version": "0"}},
+        )
+        tools = mcp_request(mcp_client, "tools/list")  # stateless: no session ID needed
+
+    assert init["serverInfo"]["name"] == "mondria-rag"
+    assert {tool["name"] for tool in tools["tools"]} == {"search_mondria_docs", "ask_mondria"}

@@ -1,9 +1,10 @@
 """MCP server exposing the Mondria knowledge base to MCP clients such as Claude Code.
 
-Runs over stdio: the client starts this script as a subprocess and exchanges JSON-RPC
-messages through its stdin/stdout. Nothing else may be printed to stdout.
-
-Register it in Claude Code:
+Two transports share these tools:
+- Remote (Streamable HTTP), mounted by main.py at /api/mcp on the deployed API:
+    claude mcp add --transport http mondria-rag https://rag-zero.vercel.app/api/mcp
+- Local (stdio), running this script: the client starts it as a subprocess and exchanges
+  JSON-RPC messages through stdin/stdout, so nothing else may be printed to stdout.
     claude mcp add mondria-rag -- <repo>/.venv/bin/python <repo>/api/mcp_server.py
 """
 
