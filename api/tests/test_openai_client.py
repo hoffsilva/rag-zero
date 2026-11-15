@@ -81,3 +81,31 @@ async def test_chat_rejects_a_truncated_answer(chat_returns):
 
     with pytest.raises(RuntimeError, match="length"):
         await openai_client.chat([{"role": "user", "content": "q"}])
+
+
+@pytest.mark.anyio
+async def test_chat_retries_output_with_nul_characters(monkeypatch):
+    monkeypatch.setenv("OPENAI_CHAT_MODEL", "gpt-4.1-mini")
+    replies = iter([chat_response('{"answer": "employ\u0000s"}'), chat_response('{"answer": "employés"}')])
+
+    async def fake_post(path: str, body: dict) -> dict:
+        return next(replies)
+
+    monkeypatch.setattr(openai_client, "_post", fake_post)
+
+    assert await openai_client.chat([{"role": "user", "content": "q"}]) == '{"answer": "employés"}'
+
+
+@pytest.mark.anyio
+async def test_chat_strips_nul_characters_when_every_attempt_has_them(monkeypatch):
+    monkeypatch.setenv("OPENAI_CHAT_MODEL", "gpt-4.1-mini")
+    calls = []
+
+    async def fake_post(path: str, body: dict) -> dict:
+        calls.append(body)
+        return chat_response('{"answer": "a\u0000b"}')
+
+    monkeypatch.setattr(openai_client, "_post", fake_post)
+
+    assert await openai_client.chat([{"role": "user", "content": "q"}]) == '{"answer": "ab"}'
+    assert len(calls) == openai_client.CHAT_ATTEMPTS

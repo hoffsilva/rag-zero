@@ -1,8 +1,11 @@
 """Minimal async client for the OpenAI embeddings and chat completions endpoints."""
 
+import logging
 import os
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 OPENAI_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
@@ -56,16 +59,27 @@ class ChatRefusal(Exception):
     """The model declined to answer (Structured Outputs returns a refusal instead of JSON)."""
 
 
+CHAT_ATTEMPTS = 3  # retries for corrupted output (see below)
+
+
 async def chat(messages: list[dict[str, str]], json_schema: dict | None = None) -> str:
     body: dict = {"model": chat_model(), "messages": messages, "max_completion_tokens": MAX_ANSWER_TOKENS}
     if json_schema:
         body["response_format"] = {"type": "json_schema", "json_schema": json_schema}
-    result = await _post("/chat/completions", body)
-    choice = result["choices"][0]
-    message = choice["message"]
-    if message.get("refusal"):
-        raise ChatRefusal(message["refusal"])
-    if choice.get("finish_reason") != "stop":
-        # "length" means the answer hit MAX_ANSWER_TOKENS; truncated JSON can't be parsed.
-        raise RuntimeError(f"Chat completion did not finish (finish_reason={choice.get('finish_reason')})")
-    return (message.get("content") or "").strip()
+    for attempt in range(1, CHAT_ATTEMPTS + 1):
+        result = await _post("/chat/completions", body)
+        choice = result["choices"][0]
+        message = choice["message"]
+        if message.get("refusal"):
+            raise ChatRefusal(message["refusal"])
+        if choice.get("finish_reason") != "stop":
+            # "length" means the answer hit MAX_ANSWER_TOKENS; truncated JSON can't be parsed.
+            raise RuntimeError(f"Chat completion did not finish (finish_reason={choice.get('finish_reason')})")
+        content = (message.get("content") or "").strip()
+        # Seen in production: structured output where accented letters came back as "\u0000"
+        # ("employés" -> "employ\u0000s"), intermittently. Postgres rejects NUL characters and the
+        # text is unreadable, so ask again; the last attempt is returned with them removed.
+        if "\x00" not in content:
+            return content
+        logger.warning("Chat output contained NUL characters (attempt %d of %d)", attempt, CHAT_ATTEMPTS)
+    return content.replace("\x00", "")
