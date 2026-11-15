@@ -56,8 +56,10 @@ api/
   eval/questions.json     Evaluation set (29 questions)
   eval/run_eval.py        Hit rate, MRR, threshold FP/FN, answer error rate
 web/
-  app/page.tsx            Page
+  app/page.tsx            Demo page
+  app/evaluation/page.tsx Evaluation report page
   components/ask-form.tsx Question UI, calls /api/ask
+  data/evaluation.json    Saved evaluation results
 vercel.json               Services: /api/* → api, the rest → web
 ```
 
@@ -116,8 +118,10 @@ Then ask Claude Code something like "Where are Mondria's offices?" and it calls 
 `api/eval/questions.json` has 29 questions in French, English and Portuguese: 23 whose answer is in the docs (each with the section IDs that answer it) and 6 whose answer isn't (CEO, revenue, headcount, mobile apps, weather, a poutine recipe). `api/eval/run_eval.py` measures retrieval separately from the LLM, because a wrong answer can come from either step and they are fixed differently.
 
 ```bash
-cd api && python eval/run_eval.py --answers
+cd api && python eval/run_eval.py --answers --save
 ```
+
+`--save` writes the results to `web/data/evaluation.json` (one entry per embedding model), which the [/evaluation page](https://rag-zero.vercel.app/evaluation) renders: metrics, model comparison, the threshold chart and every question with what was retrieved and answered. It is a committed snapshot, so visitors don't trigger API calls.
 
 | | `text-embedding-3-small` | `text-embedding-3-large` (1536 dims) |
 |---|---|---|
@@ -125,10 +129,11 @@ cd api && python eval/run_eval.py --answers
 | hit rate@5 | **100%** | 96% |
 | MRR | **0.837** | 0.828 |
 | document hit rate@5 | 100% | 100% |
+| answer error rate | **3%** | 14% |
 
 The larger model didn't help, so the app stays on the small one. The misses have the same cause with both models: the two generic sections about the company (`MON-01-01` Identité, `MON-01-02` Positionnement) mention every service, so they rank first for broad questions. With k=4 the right section is still in the context, which is why the answers are right.
 
-**Answers: 0% error rate (0/29).** Every answerable question cites an expected section, and all 6 unanswerable ones get "not available" with no citation.
+**Answers: 3% error rate (1/29) with the small model.** All 6 unanswerable questions get "not available" with no citation. The one miss is a correct answer without its citation, which the strict metric counts as wrong. Answers vary slightly between runs (an earlier run scored 0/29), so a single run is a sample, not a fixed number.
 
 **Threshold on the top-1 similarity.** Treating a low top-1 score as "not in the docs":
 
