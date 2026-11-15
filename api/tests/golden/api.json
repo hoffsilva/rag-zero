@@ -1,0 +1,738 @@
+{
+  "mondria": {
+    "vector": [
+      {
+        "strategy": "vector",
+        "answer": "Réponse de test [MON-05-03].",
+        "sources": [
+          {
+            "id": "MON-05-03",
+            "score": 0.405096,
+            "cited": true,
+            "document": "MON-05"
+          },
+          {
+            "id": "MON-05-05",
+            "score": 0.358489,
+            "cited": false,
+            "document": "MON-05"
+          },
+          {
+            "id": "MON-03-01",
+            "score": 0.353553,
+            "cited": false,
+            "document": "MON-03"
+          },
+          {
+            "id": "MON-04-04",
+            "score": 0.346194,
+            "cited": false,
+            "document": "MON-04"
+          }
+        ]
+      },
+      {
+        "strategy": "vector",
+        "answer": "Réponse de test [MON-03-02].",
+        "sources": [
+          {
+            "id": "MON-03-02",
+            "score": 0.285831,
+            "cited": true,
+            "document": "MON-03"
+          },
+          {
+            "id": "MON-02-03",
+            "score": 0.196419,
+            "cited": false,
+            "document": "MON-02"
+          },
+          {
+            "id": "MON-02-02",
+            "score": 0.152499,
+            "cited": false,
+            "document": "MON-02"
+          },
+          {
+            "id": "MON-01-03",
+            "score": 0.150756,
+            "cited": false,
+            "document": "MON-01"
+          }
+        ]
+      },
+      {
+        "strategy": "vector",
+        "answer": "Réponse de test [MON-05-02].",
+        "sources": [
+          {
+            "id": "MON-05-02",
+            "score": 0.102869,
+            "cited": true,
+            "document": "MON-05"
+          },
+          {
+            "id": "MON-01-01",
+            "score": 0.071067,
+            "cited": false,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-04-02",
+            "score": 0.063758,
+            "cited": false,
+            "document": "MON-04"
+          },
+          {
+            "id": "MON-02-02",
+            "score": 0.062257,
+            "cited": false,
+            "document": "MON-02"
+          }
+        ]
+      }
+    ],
+    "keyword": [
+      {
+        "strategy": "keyword",
+        "answer": "Réponse de test [MON-01-04].",
+        "sources": [
+          {
+            "id": "MON-01-04",
+            "score": 0.086562,
+            "cited": true,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-02-01",
+            "score": 0.031893,
+            "cited": false,
+            "document": "MON-02"
+          },
+          {
+            "id": "MON-01-02",
+            "score": 0.031466,
+            "cited": false,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-01-01",
+            "score": 0.031067,
+            "cited": false,
+            "document": "MON-01"
+          }
+        ]
+      },
+      {
+        "strategy": "keyword",
+        "answer": "Réponse de test [MON-05-01].",
+        "sources": [
+          {
+            "id": "MON-05-01",
+            "score": 0.058241,
+            "cited": true,
+            "document": "MON-05"
+          },
+          {
+            "id": "MON-02-01",
+            "score": 0.031893,
+            "cited": false,
+            "document": "MON-02"
+          },
+          {
+            "id": "MON-01-02",
+            "score": 0.031466,
+            "cited": false,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-01-01",
+            "score": 0.031067,
+            "cited": false,
+            "document": "MON-01"
+          }
+        ]
+      },
+      {
+        "strategy": "keyword",
+        "answer": "Réponse de test [MON-05-02].",
+        "sources": [
+          {
+            "id": "MON-05-02",
+            "score": 0.09003,
+            "cited": true,
+            "document": "MON-05"
+          },
+          {
+            "id": "MON-02-01",
+            "score": 0.063786,
+            "cited": false,
+            "document": "MON-02"
+          },
+          {
+            "id": "MON-02-02",
+            "score": 0.031466,
+            "cited": false,
+            "document": "MON-02"
+          },
+          {
+            "id": "MON-01-01",
+            "score": 0.031067,
+            "cited": false,
+            "document": "MON-01"
+          }
+        ]
+      }
+    ],
+    "hybrid": [
+      {
+        "strategy": "hybrid",
+        "answer": "Réponse de test [MON-01-02].",
+        "sources": [
+          {
+            "id": "MON-01-02",
+            "score": 0.030798,
+            "cited": true,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-03-01",
+            "score": 0.030798,
+            "cited": false,
+            "document": "MON-03"
+          },
+          {
+            "id": "MON-05-03",
+            "score": 0.030679,
+            "cited": false,
+            "document": "MON-05"
+          },
+          {
+            "id": "MON-01-03",
+            "score": 0.030536,
+            "cited": false,
+            "document": "MON-01"
+          }
+        ]
+      },
+      {
+        "strategy": "hybrid",
+        "answer": "Réponse de test [MON-02-03].",
+        "sources": [
+          {
+            "id": "MON-02-03",
+            "score": 0.031514,
+            "cited": true,
+            "document": "MON-02"
+          },
+          {
+            "id": "MON-01-03",
+            "score": 0.030777,
+            "cited": false,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-05-01",
+            "score": 0.030679,
+            "cited": false,
+            "document": "MON-05"
+          },
+          {
+            "id": "MON-01-01",
+            "score": 0.03055,
+            "cited": false,
+            "document": "MON-01"
+          }
+        ]
+      },
+      {
+        "strategy": "hybrid",
+        "answer": "Réponse de test [MON-05-02].",
+        "sources": [
+          {
+            "id": "MON-05-02",
+            "score": 0.032787,
+            "cited": true,
+            "document": "MON-05"
+          },
+          {
+            "id": "MON-01-01",
+            "score": 0.031754,
+            "cited": false,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-02-02",
+            "score": 0.031498,
+            "cited": false,
+            "document": "MON-02"
+          },
+          {
+            "id": "MON-02-01",
+            "score": 0.031054,
+            "cited": false,
+            "document": "MON-02"
+          }
+        ]
+      }
+    ],
+    "mmr": [
+      {
+        "strategy": "mmr",
+        "answer": "Réponse de test [MON-05-03].",
+        "sources": [
+          {
+            "id": "MON-05-03",
+            "score": 0.405096,
+            "cited": true,
+            "document": "MON-05"
+          },
+          {
+            "id": "MON-01-03",
+            "score": 0.307729,
+            "cited": false,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-04-04",
+            "score": 0.346194,
+            "cited": false,
+            "document": "MON-04"
+          },
+          {
+            "id": "MON-05-05",
+            "score": 0.358489,
+            "cited": false,
+            "document": "MON-05"
+          }
+        ]
+      },
+      {
+        "strategy": "mmr",
+        "answer": "Réponse de test [MON-03-02].",
+        "sources": [
+          {
+            "id": "MON-03-02",
+            "score": 0.285831,
+            "cited": true,
+            "document": "MON-03"
+          },
+          {
+            "id": "MON-01-04",
+            "score": 0.098295,
+            "cited": false,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-01-03",
+            "score": 0.150756,
+            "cited": false,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-01-01",
+            "score": 0.116052,
+            "cited": false,
+            "document": "MON-01"
+          }
+        ]
+      },
+      {
+        "strategy": "mmr",
+        "answer": "Réponse de test [MON-05-02].",
+        "sources": [
+          {
+            "id": "MON-05-02",
+            "score": 0.102869,
+            "cited": true,
+            "document": "MON-05"
+          },
+          {
+            "id": "MON-01-03",
+            "score": 0.061546,
+            "cited": false,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-01-01",
+            "score": 0.071067,
+            "cited": false,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-04-02",
+            "score": 0.063758,
+            "cited": false,
+            "document": "MON-04"
+          }
+        ]
+      }
+    ],
+    "multi_query": [
+      {
+        "strategy": "multi_query",
+        "answer": "Réponse de test [MON-05-01].",
+        "sources": [
+          {
+            "id": "MON-05-01",
+            "score": 0.062095,
+            "cited": true,
+            "document": "MON-05"
+          },
+          {
+            "id": "MON-03-01",
+            "score": 0.060223,
+            "cited": false,
+            "document": "MON-03"
+          },
+          {
+            "id": "MON-01-01",
+            "score": 0.059673,
+            "cited": false,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-01-03",
+            "score": 0.059463,
+            "cited": false,
+            "document": "MON-01"
+          }
+        ]
+      },
+      {
+        "strategy": "multi_query",
+        "answer": "Réponse de test [MON-05-01].",
+        "sources": [
+          {
+            "id": "MON-05-01",
+            "score": 0.06123,
+            "cited": true,
+            "document": "MON-05"
+          },
+          {
+            "id": "MON-02-02",
+            "score": 0.060411,
+            "cited": false,
+            "document": "MON-02"
+          },
+          {
+            "id": "MON-02-03",
+            "score": 0.06029,
+            "cited": false,
+            "document": "MON-02"
+          },
+          {
+            "id": "MON-01-01",
+            "score": 0.060106,
+            "cited": false,
+            "document": "MON-01"
+          }
+        ]
+      },
+      {
+        "strategy": "multi_query",
+        "answer": "Réponse de test [MON-05-01].",
+        "sources": [
+          {
+            "id": "MON-05-01",
+            "score": 0.062095,
+            "cited": true,
+            "document": "MON-05"
+          },
+          {
+            "id": "MON-01-01",
+            "score": 0.06131,
+            "cited": false,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-02-01",
+            "score": 0.060187,
+            "cited": false,
+            "document": "MON-02"
+          },
+          {
+            "id": "MON-02-02",
+            "score": 0.060163,
+            "cited": false,
+            "document": "MON-02"
+          }
+        ]
+      }
+    ],
+    "rerank": [
+      {
+        "strategy": "rerank",
+        "answer": "Réponse de test [MON-01-01].",
+        "sources": [
+          {
+            "id": "MON-01-01",
+            "score": 1.0,
+            "cited": true,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-01-02",
+            "score": 0.9,
+            "cited": false,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-01-03",
+            "score": 0.8,
+            "cited": false,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-03-01",
+            "score": 0.7,
+            "cited": false,
+            "document": "MON-03"
+          }
+        ]
+      },
+      {
+        "strategy": "rerank",
+        "answer": "Réponse de test [MON-01-01].",
+        "sources": [
+          {
+            "id": "MON-01-01",
+            "score": 1.0,
+            "cited": true,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-01-03",
+            "score": 0.9,
+            "cited": false,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-01-04",
+            "score": 0.8,
+            "cited": false,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-02-02",
+            "score": 0.7,
+            "cited": false,
+            "document": "MON-02"
+          }
+        ]
+      },
+      {
+        "strategy": "rerank",
+        "answer": "Réponse de test [MON-01-01].",
+        "sources": [
+          {
+            "id": "MON-01-01",
+            "score": 1.0,
+            "cited": true,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-01-03",
+            "score": 0.9,
+            "cited": false,
+            "document": "MON-01"
+          },
+          {
+            "id": "MON-02-01",
+            "score": 0.8,
+            "cited": false,
+            "document": "MON-02"
+          },
+          {
+            "id": "MON-02-02",
+            "score": 0.7,
+            "cited": false,
+            "document": "MON-02"
+          }
+        ]
+      }
+    ],
+    "default": {
+      "strategy": "rerank",
+      "answer": "Réponse de test [MON-01-01].",
+      "sources": [
+        {
+          "id": "MON-01-01",
+          "score": 1.0,
+          "cited": true,
+          "document": "MON-01"
+        },
+        {
+          "id": "MON-01-02",
+          "score": 0.9,
+          "cited": false,
+          "document": "MON-01"
+        },
+        {
+          "id": "MON-01-03",
+          "score": 0.8,
+          "cited": false,
+          "document": "MON-01"
+        },
+        {
+          "id": "MON-03-01",
+          "score": 0.7,
+          "cited": false,
+          "document": "MON-03"
+        }
+      ]
+    }
+  },
+  "upload": {
+    "document": {
+      "title": "Guide du télétravail",
+      "file": "guide.md",
+      "kind": "markdown",
+      "size_bytes": 255,
+      "sections": [
+        "Horaires",
+        "Équipement",
+        "Sécurité"
+      ],
+      "language": "français",
+      "summary": "Un guide.",
+      "suggested_questions": [
+        "Combien de jours ?"
+      ]
+    },
+    "answers": {
+      "vector": {
+        "strategy": "vector",
+        "answer": "Réponse de test [DOC-01-03].",
+        "sources": [
+          {
+            "id": "DOC-01-03",
+            "score": 0.565685,
+            "cited": true,
+            "document": "DOC-01"
+          },
+          {
+            "id": "DOC-01-01",
+            "score": 0.0,
+            "cited": false,
+            "document": "DOC-01"
+          },
+          {
+            "id": "DOC-01-02",
+            "score": 0.0,
+            "cited": false,
+            "document": "DOC-01"
+          }
+        ]
+      },
+      "keyword": {
+        "strategy": "keyword",
+        "answer": "Réponse de test [DOC-01-03].",
+        "sources": [
+          {
+            "id": "DOC-01-03",
+            "score": 0.09618,
+            "cited": true,
+            "document": "DOC-01"
+          }
+        ]
+      },
+      "hybrid": {
+        "strategy": "hybrid",
+        "answer": "Réponse de test [DOC-01-03].",
+        "sources": [
+          {
+            "id": "DOC-01-03",
+            "score": 0.032787,
+            "cited": true,
+            "document": "DOC-01"
+          },
+          {
+            "id": "DOC-01-01",
+            "score": 0.016129,
+            "cited": false,
+            "document": "DOC-01"
+          },
+          {
+            "id": "DOC-01-02",
+            "score": 0.015873,
+            "cited": false,
+            "document": "DOC-01"
+          }
+        ]
+      },
+      "mmr": {
+        "strategy": "mmr",
+        "answer": "Réponse de test [DOC-01-03].",
+        "sources": [
+          {
+            "id": "DOC-01-03",
+            "score": 0.565685,
+            "cited": true,
+            "document": "DOC-01"
+          },
+          {
+            "id": "DOC-01-01",
+            "score": 0.0,
+            "cited": false,
+            "document": "DOC-01"
+          },
+          {
+            "id": "DOC-01-02",
+            "score": 0.0,
+            "cited": false,
+            "document": "DOC-01"
+          }
+        ]
+      },
+      "multi_query": {
+        "strategy": "multi_query",
+        "answer": "Réponse de test [DOC-01-01].",
+        "sources": [
+          {
+            "id": "DOC-01-01",
+            "score": 0.065309,
+            "cited": true,
+            "document": "DOC-01"
+          },
+          {
+            "id": "DOC-01-02",
+            "score": 0.06426,
+            "cited": false,
+            "document": "DOC-01"
+          },
+          {
+            "id": "DOC-01-03",
+            "score": 0.064012,
+            "cited": false,
+            "document": "DOC-01"
+          }
+        ]
+      },
+      "rerank": {
+        "strategy": "rerank",
+        "answer": "Réponse de test [DOC-01-01].",
+        "sources": [
+          {
+            "id": "DOC-01-01",
+            "score": 1.0,
+            "cited": true,
+            "document": "DOC-01"
+          },
+          {
+            "id": "DOC-01-02",
+            "score": 0.666667,
+            "cited": false,
+            "document": "DOC-01"
+          },
+          {
+            "id": "DOC-01-03",
+            "score": 0.333333,
+            "cited": false,
+            "document": "DOC-01"
+          }
+        ]
+      }
+    }
+  }
+}
