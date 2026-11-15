@@ -1,24 +1,26 @@
-"""Builds data/index.json from mondria-rag-docs/ with the configured embedding model.
+"""Indexes mondria-rag-docs/ into Postgres (table chunks) with the configured embedding model.
 
-Committing the index avoids re-embedding the docs on every cold start. If it is missing or
-was built with another model, the API rebuilds it in memory instead (see rag.get_index).
+Idempotent: running it twice updates the same rows instead of duplicating them.
+The API also indexes on its first request when the table has no chunks for the model.
 
-Run from this folder with the key in the environment:
+Run from this folder with the variables in the environment:
     set -a && source .env.local && set +a && python build_index.py
 """
 
 import asyncio
-import json
 
+import db
 from openai_client import embedding_model
-from rag import INDEX_FILE, build_index
+from rag import index_documents
 
 
 async def main() -> None:
-    index = await build_index(embedding_model())
-    INDEX_FILE.parent.mkdir(exist_ok=True)
-    INDEX_FILE.write_text(json.dumps(index) + "\n", encoding="utf-8")
-    print(f"Indexed {len(index['chunks'])} chunks with {index['model']} into data/index.json")
+    model = embedding_model()
+    async with await db.connect() as connection:
+        await db.ensure_schema(connection)
+        count = await index_documents(connection, model)
+        stored = await db.count_chunks(connection, model)
+    print(f"Indexed {count} chunks with {model}; table chunks now has {stored} rows for this model")
 
 
 if __name__ == "__main__":

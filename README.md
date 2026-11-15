@@ -8,7 +8,7 @@ You ask a question. The app finds the most relevant sections of the knowledge ba
 
 The project has two parts:
 
-- **`api/`**: the RAG backend in Python (FastAPI). Chunking, indexing, retrieval, prompt and generation all live here.
+- **`api/`**: the RAG backend in Python (FastAPI). Chunking, indexing, retrieval, prompt and generation all live here. Chunks and embeddings are stored in Postgres with pgvector.
 - **`web/`**: the Next.js frontend. It only renders the page and calls `POST /api/ask`.
 
 Both `api/` and `web/` deploy as one Vercel project through [Vercel Services](https://vercel.com/docs/services): `/api/*` goes to Python, everything else to Next.js.
@@ -17,26 +17,26 @@ Both `api/` and `web/` deploy as one Vercel project through [Vercel Services](ht
 
 ```mermaid
 flowchart LR
-    subgraph Indexing["Indexing (committed, or rebuilt at startup)"]
-        D[Markdown docs] --> S[Split into sections] --> E1[Embed each section] --> J[(api/data/index.json)]
+    subgraph Indexing["Indexing (build_index.py, or first request)"]
+        D[Markdown docs] --> S[Split into sections] --> E1[Embed each section] --> J[(Postgres + pgvector)]
     end
     subgraph Query["Each question (POST /api/ask)"]
-        Q[Question] --> E2[Embed question] --> R[Cosine similarity, top-k]
+        Q[Question] --> E2[Embed question] --> R["ORDER BY embedding <=> query, top-k"]
         J --> R
         R --> A[Build prompt with retrieved sections] --> G[LLM generates answer] --> O[Answer + sources]
     end
 ```
 
-1. **Retrieval.** The question is turned into an embedding (`text-embedding-3-small` by default) and compared with the precomputed embedding of every section. The 4 closest sections win.
+1. **Retrieval.** The question is turned into an embedding (`text-embedding-3-small` by default) and Postgres returns the 4 sections with the smallest cosine distance (`<=>`).
 2. **Augmented.** Those sections become the context of the prompt, with rules: answer only from the context, cite section IDs, admit when the information isn't there.
 3. **Generation.** A chat model writes the answer. The UI shows it with the documents it cites (section text, a link to the full document and to the original Mondria page), followed by the other retrieved sections and their scores.
 
 ## Design decisions
 
 - **One chunk per section.** Each doc is split on its `## MON-xx-yy — Title` headings. One chunk covers one topic, so its embedding stays focused and the IDs double as citations. Non-content sections (`Documents associés`, `Sources`) are boundaries only.
-- **Precomputed index, no vector database.** 21 chunks fit in a JSON file loaded in memory, and the search is a dot product (OpenAI embeddings are normalized, so it equals cosine similarity). At this size, a vector database would just be extra infrastructure.
-- **API embeddings instead of a local model.** My first prototype used `intfloat/multilingual-e5-small` locally, but PyTorch doesn't fit in a serverless function. The backend uses OpenAI for embeddings and generation, so its only dependencies are FastAPI and httpx.
-- **Embedding model from the environment.** `OPENAI_EMBEDDING_MODEL` picks the model. The question has to be embedded with the same model as the index, so at startup the API checks the model of the committed index and, if it differs, rebuilds the index in memory from the docs (one API call for 21 chunks). Switching models on Vercel is a variable change and a redeploy.
+- **Postgres + pgvector.** Each section is a row in `chunks` with an `embedding vector(1536)` column, and the search is plain SQL ordered by cosine distance (`<=>`, ascending). The section ID is the primary key, so re-indexing upserts instead of duplicating rows. An HNSW index is there for scale: with 21 rows Postgres doesn't need it, with millions it trades a bit of recall for speed. Locally it runs in Docker (`pgvector/pgvector:pg17`); on Vercel it's Neon.
+- **API embeddings instead of a local model.** My first prototype used `intfloat/multilingual-e5-small` locally, but PyTorch doesn't fit in a serverless function. The backend uses OpenAI for embeddings and generation, so the function stays small (FastAPI, httpx, psycopg, pgvector).
+- **Embedding model from the environment.** `OPENAI_EMBEDDING_MODEL` picks the model. The question has to be embedded with the same model as the index, so each row stores its `embedding_model`. On its first request the API checks that the table has chunks for the configured model and, if not, re-indexes the docs (one API call for 21 chunks). Other `text-embedding-3` models are asked for 1536 dimensions so the column never changes. Switching models on Vercel is a variable change and a redeploy.
 - **Answer language.** With a French context, the model kept answering Portuguese questions in French. The fix was a structured response that makes the model name the question's language before writing the answer.
 - **Public-demo guardrails.** The API key only exists in the Python service, questions are capped at 300 characters and `top_k` is fixed on the server.
 
@@ -46,10 +46,11 @@ flowchart LR
 api/
   mondria-rag-docs/       Knowledge base (5 Markdown files, French)
   main.py                 FastAPI app: POST /api/ask, GET /api/health
-  rag.py                  Retrieval, prompt and generation
+  rag.py                  Chunking, indexing, retrieval, prompt and generation
+  db.py                   Postgres access: schema, upsert, vector search
+  schema.sql              chunks table, vector(1536) column, HNSW index
   openai_client.py        Embeddings and chat calls
-  build_index.py          Writes data/index.json with the configured model
-  data/index.json         Precomputed embeddings
+  build_index.py          Indexes the docs into Postgres (idempotent)
 web/
   app/page.tsx            Page
   components/ask-form.tsx Question UI, calls /api/ask
@@ -58,7 +59,13 @@ vercel.json               Services: /api/* → api, the rest → web
 
 ## Running locally
 
-Requires Python 3.12+, [Bun](https://bun.sh/) and an [OpenAI API key](https://platform.openai.com/).
+Requires Python 3.12+, [Bun](https://bun.sh/), Docker and an [OpenAI API key](https://platform.openai.com/).
+
+**Database:**
+
+```bash
+docker run -d --name rag-db -e POSTGRES_PASSWORD=<password> -p 5433:5432 pgvector/pgvector:pg17
+```
 
 **Backend:**
 
@@ -66,11 +73,11 @@ Requires Python 3.12+, [Bun](https://bun.sh/) and an [OpenAI API key](https://pl
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r api/requirements.txt uvicorn python-dotenv
 cd api
-cp .env.example .env.local    # fill in OPENAI_API_KEY
+cp .env.example .env.local    # fill in OPENAI_API_KEY and DATABASE_URL
 uvicorn main:app --reload --port 8000 --env-file .env.local
 ```
 
-To rebuild the committed index after changing the docs or the embedding model (then commit `api/data/index.json`):
+The API indexes the docs on its first request. To re-index after changing the docs:
 
 ```bash
 set -a && source .env.local && set +a && python build_index.py
@@ -86,7 +93,7 @@ bun dev                       # http://localhost:3000
 
 ## Deploying to Vercel
 
-Import the repo with the Root Directory set to the repository root (where `vercel.json` is), and add `OPENAI_API_KEY`, `OPENAI_CHAT_MODEL` and, optionally, `OPENAI_EMBEDDING_MODEL` as environment variables. Vercel builds `web/` and `api/` as two services behind one domain.
+Import the repo with the Root Directory set to the repository root (where `vercel.json` is), add a Neon database from the Vercel Marketplace (it sets `DATABASE_URL`), and add `OPENAI_API_KEY`, `OPENAI_CHAT_MODEL` and, optionally, `OPENAI_EMBEDDING_MODEL` as environment variables. The first request creates the table and indexes the docs. Vercel builds `web/` and `api/` as two services behind one domain.
 
 ## About the data
 
