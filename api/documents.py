@@ -157,43 +157,34 @@ def document_title(filename: str, text: str, kind: str) -> str:
     return PurePath(filename).stem
 
 
-DESCRIPTION_SCHEMA = {
-    "name": "document_description",
-    "strict": True,
-    "schema": {
-        "type": "object",
-        "properties": {
-            "language": {"type": "string", "description": "Language of the document, in French (e.g. « français »)."},
-            "summary": {"type": "string", "description": "Two or three sentences, in French."},
-            "suggested_questions": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Three questions the document answers, in the document's language.",
-            },
-        },
-        "required": ["language", "summary", "suggested_questions"],
-        "additionalProperties": False,
-    },
-}
+DESCRIPTION_PROMPT = """Describe the document for someone about to ask questions about it.
+Reply with a JSON object with exactly these keys:
+- "language": the document's language, written in French (for example "français" or "anglais")
+- "summary": two or three sentences in French
+- "suggested_questions": a list of three questions the document answers, in the document's language"""
 
 
 async def describe(text: str) -> dict:
-    """Summary, language and suggested questions from the start of the document."""
+    """Summary, language and suggested questions from the start of the document.
+
+    Uses JSON mode rather than a strict JSON schema: with the strict schema, the model
+    intermittently dropped accented letters from long French summaries ("employés" ->
+    "employs"), seen on Vercel and locally. The fields are validated here instead."""
     raw = await chat(
         [
-            {
-                "role": "system",
-                "content": "Describe the document for someone about to ask questions about it.",
-            },
+            {"role": "system", "content": DESCRIPTION_PROMPT},
             {"role": "user", "content": text[:6000]},
         ],
-        json_schema=DESCRIPTION_SCHEMA,
+        json_mode=True,
     )
     description = json.loads(raw)
+    questions = description.get("suggested_questions")
     return {
-        "language": clean(description["language"]).strip(),
-        "summary": clean(description["summary"]).strip(),
-        "suggested_questions": [clean(q).strip() for q in description["suggested_questions"] if clean(q).strip()][:3],
+        "language": clean(str(description.get("language", ""))).strip() or "inconnue",
+        "summary": clean(str(description.get("summary", ""))).strip(),
+        "suggested_questions": [
+            clean(q).strip() for q in (questions if isinstance(questions, list) else []) if isinstance(q, str) and clean(q).strip()
+        ][:3],
     }
 
 

@@ -114,7 +114,7 @@ def fake_backend(monkeypatch):
     async def fake_embed(inputs, model):
         return [[0.0] * 1536 for _ in inputs]
 
-    async def fake_chat(messages, json_schema=None):
+    async def fake_chat(messages, json_schema=None, json_mode=False):
         # A NUL character, as the model once produced in a summary: Postgres would reject it.
         return json.dumps({"language": "français", "summary": "Un\u0000 guide.", "suggested_questions": ["Q1 ?", "", "Q2 ?"]})
 

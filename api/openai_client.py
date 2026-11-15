@@ -62,10 +62,15 @@ class ChatRefusal(Exception):
 CHAT_ATTEMPTS = 3  # retries for corrupted output (see below)
 
 
-async def chat(messages: list[dict[str, str]], json_schema: dict | None = None) -> str:
+async def chat(
+    messages: list[dict[str, str]], json_schema: dict | None = None, json_mode: bool = False
+) -> str:
+    """json_schema: strict Structured Outputs. json_mode: valid JSON without a strict schema."""
     body: dict = {"model": chat_model(), "messages": messages, "max_completion_tokens": MAX_ANSWER_TOKENS}
     if json_schema:
         body["response_format"] = {"type": "json_schema", "json_schema": json_schema}
+    elif json_mode:
+        body["response_format"] = {"type": "json_object"}
     for attempt in range(1, CHAT_ATTEMPTS + 1):
         result = await _post("/chat/completions", body)
         choice = result["choices"][0]
