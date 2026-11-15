@@ -1,10 +1,15 @@
 -- Applied automatically by db.ensure_schema() before indexing; idempotent.
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- One row per document section (chunk) and embedding model. The key (section ID, model) lets
--- several models coexist, so indexing with one never wipes the vectors another instance or an
--- evaluation run is using, and re-running the indexing updates rows instead of duplicating them.
+-- One row per document section (chunk), collection and embedding model.
+-- - collection: "mondria" for the demo knowledge base, "upload-<random hex>" for a visitor's
+--   uploaded document, which only that visitor can query and which expires after 24 h.
+-- - embedding_model: several models coexist, so indexing with one never wipes the vectors
+--   another instance or an evaluation run is using.
+-- Re-running the indexing updates rows instead of duplicating them.
 CREATE TABLE IF NOT EXISTS chunks (
+    collection      text NOT NULL DEFAULT 'mondria',
+    created_at      timestamptz NOT NULL DEFAULT now(),
     id              text NOT NULL,
     title           text NOT NULL,
     content         text NOT NULL,
@@ -16,10 +21,12 @@ CREATE TABLE IF NOT EXISTS chunks (
     -- text-embedding-3-small returns 1536 dimensions; other text-embedding-3 models are
     -- asked for 1536 too (OpenAI "dimensions" parameter), so the column never changes.
     embedding       vector(1536) NOT NULL,
-    PRIMARY KEY (id, embedding_model)
+    PRIMARY KEY (collection, id, embedding_model)
 );
 
--- Migration for tables created when the primary key was the section ID alone.
+-- Migrations for tables created before collections (primary key on fewer columns).
+ALTER TABLE chunks ADD COLUMN IF NOT EXISTS collection text NOT NULL DEFAULT 'mondria';
+ALTER TABLE chunks ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
 DO $$
 BEGIN
     IF (
@@ -27,12 +34,26 @@ BEGIN
         FROM pg_index i
         JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY (i.indkey)
         WHERE i.indrelid = 'chunks'::regclass AND i.indisprimary
-    ) = 1 THEN
+    ) < 3 THEN
         ALTER TABLE chunks DROP CONSTRAINT chunks_pkey;
-        ALTER TABLE chunks ADD PRIMARY KEY (id, embedding_model);
+        ALTER TABLE chunks ADD PRIMARY KEY (collection, id, embedding_model);
     END IF;
 END
 $$;
+
+-- One row per uploaded document: what the /documents page shows next to the questions.
+CREATE TABLE IF NOT EXISTS uploads (
+    collection          text PRIMARY KEY,
+    title               text NOT NULL,
+    file                text NOT NULL,
+    kind                text NOT NULL,
+    size_bytes          integer NOT NULL,
+    sections            text[] NOT NULL,
+    language            text NOT NULL,
+    summary             text NOT NULL,
+    suggested_questions text[] NOT NULL,
+    created_at          timestamptz NOT NULL DEFAULT now()
+);
 
 -- Full-text search for the keyword and hybrid strategies: a French tsvector kept up to date by
 -- Postgres itself (generated column), with a GIN index.

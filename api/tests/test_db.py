@@ -86,7 +86,7 @@ async def test_models_coexist_so_indexing_one_keeps_the_other(connection):
     assert small[0]["score"] == pytest.approx(1.0)  # the small vectors were not overwritten
 
 
-async def test_migrates_a_table_keyed_by_section_id_alone(connection):
+async def test_migrates_a_table_created_before_collections(connection):
     await connection.execute("DROP TABLE chunks")
     await connection.execute(
         """
@@ -108,7 +108,7 @@ async def test_migrates_a_table_keyed_by_section_id_alone(connection):
         WHERE i.indrelid = 'chunks'::regclass AND i.indisprimary
         """
     )
-    assert (await cursor.fetchone())[0] == ["embedding_model", "id"]
+    assert (await cursor.fetchone())[0] == ["collection", "embedding_model", "id"]
 
 
 async def test_search_orders_by_cosine_distance(connection):
@@ -151,4 +151,36 @@ async def test_search_with_embeddings_returns_the_stored_vectors(connection):
     assert found["id"] == "MON-01-01"
     assert embedding[3] == pytest.approx(1.0)
     assert len(embedding) == DIMENSIONS
+
+
+async def test_collections_are_isolated(connection):
+    await db.replace_chunks(connection, [chunk("MON-01-01")], [unit_vector(0)], MODEL)  # mondria
+    upload = "upload-" + "a" * 32
+    await db.replace_chunks(connection, [chunk("DOC-01-01")], [unit_vector(0)], MODEL, upload)
+
+    assert [r["id"] for r in await db.search(connection, unit_vector(0), MODEL, top_k=5)] == ["MON-01-01"]
+    assert [r["id"] for r in await db.search(connection, unit_vector(0), MODEL, top_k=5, collection=upload)] == ["DOC-01-01"]
+    # Re-indexing the Mondria base doesn't delete the upload's rows.
+    await db.replace_chunks(connection, [chunk("MON-01-01")], [unit_vector(0)], MODEL)
+    assert await db.count_chunks(connection, MODEL, upload) == 1
+
+
+async def test_expired_uploads_are_deleted(connection):
+    fresh, old = "upload-" + "1" * 32, "upload-" + "2" * 32
+    for collection in (fresh, old):
+        await db.replace_chunks(connection, [chunk("DOC-01-01")], [unit_vector(0)], MODEL, collection)
+        await db.save_upload(connection, db.Upload(
+            collection=collection, title="T", file="t.md", kind="markdown", size_bytes=10, sections=["A"],
+            language="fr", summary="s", suggested_questions=["q"], expires_at="",
+        ))
+    await connection.execute("UPDATE chunks SET created_at = now() - interval '25 hours' WHERE collection = %s", (old,))
+    await connection.execute("UPDATE uploads SET created_at = now() - interval '25 hours' WHERE collection = %s", (old,))
+
+    assert await db.get_upload(connection, old) is None  # expired metadata is already hidden
+    await db.delete_expired_uploads(connection)
+
+    assert await db.count_chunks(connection, MODEL, old) == 0
+    assert await db.count_chunks(connection, MODEL, fresh) == 1
+    kept = await db.get_upload(connection, fresh)
+    assert kept is not None and kept["sections"] == ["A"]
 
