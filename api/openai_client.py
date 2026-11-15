@@ -12,6 +12,10 @@ def embedding_model() -> str:
     return os.environ.get("OPENAI_EMBEDDING_MODEL") or DEFAULT_EMBEDDING_MODEL
 
 
+def chat_model() -> str:
+    return _env("OPENAI_CHAT_MODEL")
+
+
 def _env(name: str) -> str:
     value = os.environ.get(name)
     if not value:
@@ -44,7 +48,7 @@ async def embed(inputs: list[str], model: str) -> list[list[float]]:
 
 
 async def chat(messages: list[dict[str, str]], json_schema: dict | None = None) -> str:
-    body: dict = {"model": _env("OPENAI_CHAT_MODEL"), "messages": messages}
+    body: dict = {"model": chat_model(), "messages": messages}
     if json_schema:
         body["response_format"] = {"type": "json_schema", "json_schema": json_schema}
     result = await _post("/chat/completions", body)
