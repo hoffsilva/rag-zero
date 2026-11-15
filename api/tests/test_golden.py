@@ -55,20 +55,30 @@ def fake_chat_content(body: dict) -> str:
         cited = f" [{first_id.group(1)}]" if first_id else ""
         return json.dumps({"question_language": "French", "answer": f"Réponse de test{cited}."})
     if schema == "query_variants":
-        return json.dumps({"queries": ["bureaux adresse Mondria", "secteurs organismes", "tarifs services TI"]})
+        return json.dumps(
+            {"queries": ["bureaux adresse Mondria", "secteurs organismes", "tarifs services TI"]}
+        )
     if schema == "reranking":
         ids = re.findall(r"^\[([A-Z]+-\d+-\d+)\]", messages[-1]["content"], re.MULTILINE)
         return json.dumps({"ranked_ids": sorted(ids)})  # deterministic, different from the input order
     if body.get("response_format", {}).get("type") == "json_object":
-        return json.dumps({"language": "français", "summary": "Un guide.", "suggested_questions": ["Combien de jours ?"]})
+        return json.dumps(
+            {"language": "français", "summary": "Un guide.", "suggested_questions": ["Combien de jours ?"]}
+        )
     raise AssertionError(f"unexpected chat call: {schema}")
 
 
 async def fake_openai(path: str, body: dict) -> dict:
     if path == "/embeddings":
-        return {"data": [{"index": i, "embedding": fake_embedding(text)} for i, text in enumerate(body["input"])]}
+        return {
+            "data": [{"index": i, "embedding": fake_embedding(text)} for i, text in enumerate(body["input"])]
+        }
     if path == "/chat/completions":
-        return {"choices": [{"finish_reason": "stop", "message": {"content": fake_chat_content(body), "refusal": None}}]}
+        return {
+            "choices": [
+                {"finish_reason": "stop", "message": {"content": fake_chat_content(body), "refusal": None}}
+            ]
+        }
     raise AssertionError(f"unexpected OpenAI call: {path}")
 
 
@@ -118,7 +128,12 @@ def ask_summary(response) -> dict:
         "strategy": body["strategy"],
         "answer": body["answer"],
         "sources": [
-            {"id": s["id"], "score": round(s["score"], 6), "cited": s["cited"], "document": s["document"]["id"]}
+            {
+                "id": s["id"],
+                "score": round(s["score"], 6),
+                "cited": s["cited"],
+                "document": s["document"]["id"],
+            }
             for s in body["sources"]
         ],
     }
@@ -128,7 +143,8 @@ def collect(client: TestClient) -> dict:
     results: dict = {"mondria": {}, "upload": {}}
     for strategy in STRATEGIES:
         results["mondria"][strategy] = [
-            ask_summary(client.post("/api/ask", json={"question": q, "strategy": strategy})) for q in QUESTIONS
+            ask_summary(client.post("/api/ask", json={"question": q, "strategy": strategy}))
+            for q in QUESTIONS
         ]
     results["mondria"]["default"] = ask_summary(client.post("/api/ask", json={"question": QUESTIONS[0]}))
 
@@ -140,7 +156,14 @@ def collect(client: TestClient) -> dict:
     results["upload"]["document"] = upload
     results["upload"]["answers"] = {
         strategy: ask_summary(
-            client.post("/api/ask", json={"question": "Le VPN est-il obligatoire ?", "collection": collection, "strategy": strategy})
+            client.post(
+                "/api/ask",
+                json={
+                    "question": "Le VPN est-il obligatoire ?",
+                    "collection": collection,
+                    "strategy": strategy,
+                },
+            )
         )
         for strategy in STRATEGIES
     }

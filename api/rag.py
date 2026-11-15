@@ -45,8 +45,14 @@ ANSWER_SCHEMA = {
     "schema": {
         "type": "object",
         "properties": {
-            "question_language": {"type": "string", "description": "Language the user's question is written in."},
-            "answer": {"type": "string", "description": "The answer, written in question_language, citing section IDs like [MON-01-04]."},
+            "question_language": {
+                "type": "string",
+                "description": "Language the user's question is written in.",
+            },
+            "answer": {
+                "type": "string",
+                "description": "The answer, written in question_language, citing section IDs like [MON-01-04].",
+            },
         },
         "required": ["question_language", "answer"],
         "additionalProperties": False,
@@ -73,12 +79,14 @@ def split_sections(document: Document, text: str) -> list[Chunk]:
         if not match["id"]:
             continue  # "Documents associés", "Sources": boundary only, not a chunk
         end = matches[position + 1].start() if position + 1 < len(matches) else len(text)
-        sections.append(Chunk(
-            id=match["id"],
-            title=match["title"].strip(),
-            text=text[match.start():end].strip(),
-            document=document,
-        ))
+        sections.append(
+            Chunk(
+                id=match["id"],
+                title=match["title"].strip(),
+                text=text[match.start() : end].strip(),
+                document=document,
+            )
+        )
     return sections
 
 

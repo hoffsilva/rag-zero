@@ -40,7 +40,9 @@ async def test_embeddings_are_returned_in_input_order(sent):
 
 
 def chat_response(content: str | None, finish_reason: str = "stop", refusal: str | None = None) -> dict:
-    return {"choices": [{"finish_reason": finish_reason, "message": {"content": content, "refusal": refusal}}]}
+    return {
+        "choices": [{"finish_reason": finish_reason, "message": {"content": content, "refusal": refusal}}]
+    }
 
 
 @pytest.fixture

@@ -5,12 +5,19 @@ import pytest
 import rag
 from db import Document, ScoredChunk
 
-DOCUMENT = Document(id="MON-01", title="Entreprise Mondria", file="01.md", source_urls=["https://mondria.com/"])
+DOCUMENT = Document(
+    id="MON-01", title="Entreprise Mondria", file="01.md", source_urls=["https://mondria.com/"]
+)
 
 
 def source(section_id: str, score: float = 0.5) -> ScoredChunk:
     return ScoredChunk(
-        id=section_id, title="T", text=f"## {section_id} — T\n\nTexte.", document=DOCUMENT, score=score, cited=False
+        id=section_id,
+        title="T",
+        text=f"## {section_id} — T\n\nTexte.",
+        document=DOCUMENT,
+        score=score,
+        cited=False,
     )
 
 
@@ -99,8 +106,15 @@ class FakeConnection:
 def database(monkeypatch):
     """Fakes the database layer and records what open_connection does."""
     state = {
-        "rows": {}, "indexed": [], "schema_created": 0, "registered": 0,
-        "locked": 0, "committed": 0, "rolled_back": 0, "closed": 0, "fail_indexing": False,
+        "rows": {},
+        "indexed": [],
+        "schema_created": 0,
+        "registered": 0,
+        "locked": 0,
+        "committed": 0,
+        "rolled_back": 0,
+        "closed": 0,
+        "fail_indexing": False,
     }
 
     async def connect():

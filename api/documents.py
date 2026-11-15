@@ -117,7 +117,7 @@ def split_sections(text: str) -> list[tuple[str, str]]:
         sections.append(("", text[: matches[0].start()].strip()))
     for position, match in enumerate(matches):
         end = matches[position + 1].start() if position + 1 < len(matches) else len(text)
-        body = text[match.end():end].strip()
+        body = text[match.end() : end].strip()
         if body:
             sections.append((match.group(2).strip(), body))
     return sections
@@ -133,14 +133,16 @@ def chunk_text(text: str, document: Document) -> list[Chunk]:
         for piece in pieces:
             number = len(chunks) + 1
             label = title or first_words(piece)
-            chunks.append(Chunk(
-                id=f"{DOCUMENT_ID}-{number:02d}",
-                title=label,
-                # Same shape as the Mondria sections: the heading line stays in the embedded text
-                # (it carries meaning), and the UI strips it when showing the section body.
-                text=f"## {title}\n\n{piece}" if title else piece,
-                document=document,
-            ))
+            chunks.append(
+                Chunk(
+                    id=f"{DOCUMENT_ID}-{number:02d}",
+                    title=label,
+                    # Same shape as the Mondria sections: the heading line stays in the embedded text
+                    # (it carries meaning), and the UI strips it when showing the section body.
+                    text=f"## {title}\n\n{piece}" if title else piece,
+                    document=document,
+                )
+            )
     return chunks
 
 
@@ -183,7 +185,9 @@ async def describe(text: str) -> dict:
         "language": clean(str(description.get("language", ""))).strip() or "inconnue",
         "summary": clean(str(description.get("summary", ""))).strip(),
         "suggested_questions": [
-            clean(q).strip() for q in (questions if isinstance(questions, list) else []) if isinstance(q, str) and clean(q).strip()
+            clean(q).strip()
+            for q in (questions if isinstance(questions, list) else [])
+            if isinstance(q, str) and clean(q).strip()
         ][:3],
     }
 

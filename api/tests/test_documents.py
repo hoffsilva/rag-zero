@@ -34,8 +34,12 @@ def make_pdf(text: str | None) -> bytes:
 
 # --- extraction -----------------------------------------------------------------------------
 
+
 def test_extracts_markdown_and_text_as_utf8():
-    assert documents.extract_text("notes.md", "# Titre\r\n\r\nCafé".encode()) == ("# Titre\n\nCafé", "markdown")
+    assert documents.extract_text("notes.md", "# Titre\r\n\r\nCafé".encode()) == (
+        "# Titre\n\nCafé",
+        "markdown",
+    )
     assert documents.extract_text("notes.TXT", b"  hello  ") == ("hello", "text")
 
 
@@ -65,6 +69,7 @@ def test_rejects_unsupported_too_large_or_empty_files(filename, data, status):
 
 
 # --- chunking -------------------------------------------------------------------------------
+
 
 def test_one_chunk_per_markdown_section_with_citable_ids():
     text = "# Guide\n\nIntro.\n\n## Horaires\n\nTrois jours.\n\n### Exceptions\n\nAucune.\n\n## Vide\n"
@@ -106,6 +111,7 @@ def test_split_by_size_prefers_sentence_boundaries():
 
 # --- API ------------------------------------------------------------------------------------
 
+
 @pytest.fixture
 def fake_backend(monkeypatch):
     """Fakes embeddings, the description chat call and the database writes."""
@@ -116,7 +122,13 @@ def fake_backend(monkeypatch):
 
     async def fake_chat(messages, json_schema=None, json_mode=False):
         # A NUL character, as the model once produced in a summary: Postgres would reject it.
-        return json.dumps({"language": "français", "summary": "Un\u0000 guide.", "suggested_questions": ["Q1 ?", "", "Q2 ?"]})
+        return json.dumps(
+            {
+                "language": "français",
+                "summary": "Un\u0000 guide.",
+                "suggested_questions": ["Q1 ?", "", "Q2 ?"],
+            }
+        )
 
     class FakeConnection:
         async def __aenter__(self):

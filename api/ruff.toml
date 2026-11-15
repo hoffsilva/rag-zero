@@ -1,0 +1,23 @@
+# Lint and format configuration for the Python backend (ruff check / ruff format).
+target-version = "py312"  # the Vercel Python runtime
+line-length = 110
+
+[lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # import sorting
+    "B",        # bugbear: likely bugs
+    "UP",       # pyupgrade: modern syntax for the target version
+    "SIM",      # simplifications
+    "N",        # naming conventions
+    "RUF",      # ruff-specific checks
+    "ASYNC",    # async pitfalls (blocking calls in coroutines)
+    "S",        # bandit: security
+]
+
+[lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S608"]  # asserts, fake credentials and SQL built in tests are fine there
+
+[format]
+quote-style = "double"

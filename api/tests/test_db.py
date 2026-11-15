@@ -19,7 +19,9 @@ pytestmark = [pytest.mark.db, pytest.mark.anyio]
 
 DIMENSIONS = 1536
 MODEL = "test-model"
-DOCUMENT = Document(id="MON-01", title="Entreprise Mondria", file="01.md", source_urls=["https://mondria.com/"])
+DOCUMENT = Document(
+    id="MON-01", title="Entreprise Mondria", file="01.md", source_urls=["https://mondria.com/"]
+)
 
 
 def unit_vector(axis: int, second_axis: int | None = None) -> list[float]:
@@ -33,7 +35,9 @@ def unit_vector(axis: int, second_axis: int | None = None) -> list[float]:
 
 
 def chunk(section_id: str) -> Chunk:
-    return Chunk(id=section_id, title=f"Section {section_id}", text=f"## {section_id}\n\ntexte", document=DOCUMENT)
+    return Chunk(
+        id=section_id, title=f"Section {section_id}", text=f"## {section_id}\n\ntexte", document=DOCUMENT
+    )
 
 
 @pytest.fixture
@@ -67,7 +71,9 @@ async def test_indexing_twice_does_not_duplicate_rows(connection):
 
 
 async def test_reindexing_removes_sections_deleted_from_the_docs(connection):
-    await db.replace_chunks(connection, [chunk("MON-01-01"), chunk("MON-01-02")], [unit_vector(0), unit_vector(1)], MODEL)
+    await db.replace_chunks(
+        connection, [chunk("MON-01-01"), chunk("MON-01-02")], [unit_vector(0), unit_vector(1)], MODEL
+    )
 
     await db.replace_chunks(connection, [chunk("MON-01-01")], [unit_vector(0)], MODEL)
 
@@ -123,14 +129,24 @@ async def test_search_orders_by_cosine_distance(connection):
 
     assert [r["id"] for r in results] == ["MON-01-01", "MON-01-02"]
     assert results[0]["score"] == pytest.approx(1.0)  # same direction: distance 0
-    assert results[1]["score"] == pytest.approx(2 ** -0.5)  # 45 degrees: cos = 0.707
+    assert results[1]["score"] == pytest.approx(2**-0.5)  # 45 degrees: cos = 0.707
     assert results[0]["document"] == DOCUMENT
     assert results[0]["cited"] is False
 
 
 async def test_keyword_search_matches_french_word_forms(connection):
-    office = Chunk(id="MON-01-04", title="Coordonnées", text="Bureaux publiés à Sherbrooke et Boisbriand.", document=DOCUMENT)
-    nonprofits = Chunk(id="MON-05-01", title="Secteurs visés", text="Organismes sans but lucratif (OBNL) et commerce de détail.", document=DOCUMENT)
+    office = Chunk(
+        id="MON-01-04",
+        title="Coordonnées",
+        text="Bureaux publiés à Sherbrooke et Boisbriand.",
+        document=DOCUMENT,
+    )
+    nonprofits = Chunk(
+        id="MON-05-01",
+        title="Secteurs visés",
+        text="Organismes sans but lucratif (OBNL) et commerce de détail.",
+        document=DOCUMENT,
+    )
     await db.replace_chunks(connection, [office, nonprofits], [unit_vector(0), unit_vector(1)], MODEL)
 
     # "bureau" (singular) matches "Bureaux" through French stemming; short words like "où" are ignored.
@@ -159,7 +175,9 @@ async def test_collections_are_isolated(connection):
     await db.replace_chunks(connection, [chunk("DOC-01-01")], [unit_vector(0)], MODEL, upload)
 
     assert [r["id"] for r in await db.search(connection, unit_vector(0), MODEL, top_k=5)] == ["MON-01-01"]
-    assert [r["id"] for r in await db.search(connection, unit_vector(0), MODEL, top_k=5, collection=upload)] == ["DOC-01-01"]
+    assert [
+        r["id"] for r in await db.search(connection, unit_vector(0), MODEL, top_k=5, collection=upload)
+    ] == ["DOC-01-01"]
     # Re-indexing the Mondria base doesn't delete the upload's rows.
     await db.replace_chunks(connection, [chunk("MON-01-01")], [unit_vector(0)], MODEL)
     assert await db.count_chunks(connection, MODEL, upload) == 1
@@ -169,12 +187,27 @@ async def test_expired_uploads_are_deleted(connection):
     fresh, old = "upload-" + "1" * 32, "upload-" + "2" * 32
     for collection in (fresh, old):
         await db.replace_chunks(connection, [chunk("DOC-01-01")], [unit_vector(0)], MODEL, collection)
-        await db.save_upload(connection, db.Upload(
-            collection=collection, title="T", file="t.md", kind="markdown", size_bytes=10, sections=["A"],
-            language="fr", summary="s", suggested_questions=["q"], expires_at="",
-        ))
-    await connection.execute("UPDATE chunks SET created_at = now() - interval '25 hours' WHERE collection = %s", (old,))
-    await connection.execute("UPDATE uploads SET created_at = now() - interval '25 hours' WHERE collection = %s", (old,))
+        await db.save_upload(
+            connection,
+            db.Upload(
+                collection=collection,
+                title="T",
+                file="t.md",
+                kind="markdown",
+                size_bytes=10,
+                sections=["A"],
+                language="fr",
+                summary="s",
+                suggested_questions=["q"],
+                expires_at="",
+            ),
+        )
+    await connection.execute(
+        "UPDATE chunks SET created_at = now() - interval '25 hours' WHERE collection = %s", (old,)
+    )
+    await connection.execute(
+        "UPDATE uploads SET created_at = now() - interval '25 hours' WHERE collection = %s", (old,)
+    )
 
     assert await db.get_upload(connection, old) is None  # expired metadata is already hidden
     await db.delete_expired_uploads(connection)
@@ -183,4 +216,3 @@ async def test_expired_uploads_are_deleted(connection):
     assert await db.count_chunks(connection, MODEL, fresh) == 1
     kept = await db.get_upload(connection, fresh)
     assert kept is not None and kept["sections"] == ["A"]
-

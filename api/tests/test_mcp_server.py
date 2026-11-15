@@ -15,7 +15,11 @@ async def test_search_tool_returns_sections_and_clamps_top_k(monkeypatch):
     async def fake_retrieve(query: str, top_k: int, strategy=None):
         calls["top_k"] = top_k
         calls["strategy"] = strategy
-        return [ScoredChunk(id="MON-01-04", title="Coordonnées", text="...", document=DOCUMENT, score=0.64567, cited=False)]
+        return [
+            ScoredChunk(
+                id="MON-01-04", title="Coordonnées", text="...", document=DOCUMENT, score=0.64567, cited=False
+            )
+        ]
 
     monkeypatch.setattr(mcp_server.rag, "retrieve", fake_retrieve)
 
@@ -24,6 +28,11 @@ async def test_search_tool_returns_sections_and_clamps_top_k(monkeypatch):
     assert calls["top_k"] == 10
     assert calls["strategy"] == "hybrid"
     assert results == [
-        {"id": "MON-01-04", "title": "Coordonnées", "document": "Entreprise Mondria", "score": 0.646, "text": "..."}
+        {
+            "id": "MON-01-04",
+            "title": "Coordonnées",
+            "document": "Entreprise Mondria",
+            "score": 0.646,
+            "text": "...",
+        }
     ]
-

@@ -1,2 +1,4 @@
 # Local development only (not deployed)
 pytest==9.2.0
+ruff==0.17.5
+mypy==2.4.1

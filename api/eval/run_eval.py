@@ -88,13 +88,15 @@ async def retrieve_all(cases: list[Case], k: int, strategy: retrieval.Strategy) 
             sources = await retrieval.run(strategy, connection, case["question"], model, k)
             latency_ms = (time.perf_counter() - started) * 1000
             ids = [source["id"] for source in sources]
-            results.append(QuestionResult(
-                question=case["question"],
-                expected=case["expected"],
-                retrieved=[Retrieved(id=s["id"], score=round(s["score"], 4)) for s in sources],
-                rank=first_hit_rank(case["expected"], ids) if case["expected"] else None,
-                latency_ms=round(latency_ms),
-            ))
+            results.append(
+                QuestionResult(
+                    question=case["question"],
+                    expected=case["expected"],
+                    retrieved=[Retrieved(id=s["id"], score=round(s["score"], 4)) for s in sources],
+                    rank=first_hit_rank(case["expected"], ids) if case["expected"] else None,
+                    latency_ms=round(latency_ms),
+                )
+            )
     return results
 
 
@@ -165,7 +167,9 @@ async def evaluate_answers(results: list[QuestionResult], strategy: retrieval.St
 
 def print_report(report: dict) -> None:
     retrieval, threshold, k = report["retrieval"], report["threshold"], report["k"]
-    print(f"# Evaluation — {report['embedding_model']}, strategy {report['strategy']}, {len(report['questions'])} questions")
+    print(
+        f"# Evaluation — {report['embedding_model']}, strategy {report['strategy']}, {len(report['questions'])} questions"
+    )
     print(f"\n## Retrieval ({retrieval['answerable']} answerable questions, k={k})")
     print(f"hit rate@1:          {retrieval['hit_rate_at_1']:.0%}")
     print(f"hit rate@{k}:          {retrieval['hit_rate_at_k']:.0%}")
@@ -182,24 +186,34 @@ def print_report(report: dict) -> None:
 
     if threshold is not None:
         print("\n## Threshold on the top-1 similarity")
-        print(f"answerable top-1:   min {threshold['answerable_top1']['min']:.3f}  max {threshold['answerable_top1']['max']:.3f}")
-        print(f"unanswerable top-1: min {threshold['unanswerable_top1']['min']:.3f}  max {threshold['unanswerable_top1']['max']:.3f}")
+        print(
+            f"answerable top-1:   min {threshold['answerable_top1']['min']:.3f}  max {threshold['answerable_top1']['max']:.3f}"
+        )
+        print(
+            f"unanswerable top-1: min {threshold['unanswerable_top1']['min']:.3f}  max {threshold['unanswerable_top1']['max']:.3f}"
+        )
         print("\nthreshold  FP  FN  error rate")
         for row in threshold["rows"] + [threshold["best"]]:
             marker = "  <- best" if row is threshold["best"] else ""
-            print(f"  {row['threshold']:.3f}    {row['false_positives']:>2}  {row['false_negatives']:>2}  {row['error_rate']:.0%}{marker}")
+            print(
+                f"  {row['threshold']:.3f}    {row['false_positives']:>2}  {row['false_negatives']:>2}  {row['error_rate']:.0%}{marker}"
+            )
 
     answers = report.get("answers")
     if answers:
         total = len(report["questions"])
         wrong = answers["answerable_wrong"] + answers["unanswerable_answered"]
-        print(f"\n## Answer citations ({answers['chat_model']}, generated from the top {answers['answer_k']})")
+        print(
+            f"\n## Answer citations ({answers['chat_model']}, generated from the top {answers['answer_k']})"
+        )
         print(f"citation error rate:       {answers['citation_error_rate']:.0%} ({wrong}/{total})")
         print(f"answerable, wrong/no cite: {answers['answerable_wrong']}")
         print(f"unanswerable, answered:    {answers['unanswerable_answered']}")
         for q in report["questions"]:
             if not q["citation_ok"]:
-                print(f"  - {q['question']}\n    expected {q['expected'] or 'no citation'}; cited {q['cited'] or 'nothing'}\n    {q['answer']}")
+                print(
+                    f"  - {q['question']}\n    expected {q['expected'] or 'no citation'}; cited {q['cited'] or 'nothing'}\n    {q['answer']}"
+                )
 
 
 def run_key(report: dict) -> str:
@@ -232,7 +246,9 @@ async def evaluate(cases: list[Case], k: int, strategy: retrieval.Strategy, answ
 
 
 async def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--k", type=int, default=5)
     parser.add_argument(
         "--strategy",
@@ -245,7 +261,9 @@ async def main() -> None:
     args = parser.parse_args()
 
     cases: list[Case] = json.loads(QUESTIONS_FILE.read_text(encoding="utf-8"))["questions"]
-    strategies = retrieval.STRATEGIES if args.strategy == "all" else [args.strategy or retrieval.default_strategy()]
+    strategies = (
+        retrieval.STRATEGIES if args.strategy == "all" else [args.strategy or retrieval.default_strategy()]
+    )
     for strategy in strategies:
         report = await evaluate(cases, args.k, strategy, args.answers)
         print_report(report)

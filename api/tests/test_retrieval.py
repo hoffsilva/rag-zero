@@ -9,7 +9,9 @@ DOCUMENT = Document(id="MON-01", title="Entreprise Mondria", file="01.md", sourc
 
 
 def chunk(section_id: str, score: float = 0.5) -> ScoredChunk:
-    return ScoredChunk(id=section_id, title="T", text=f"texte {section_id}", document=DOCUMENT, score=score, cited=False)
+    return ScoredChunk(
+        id=section_id, title="T", text=f"texte {section_id}", document=DOCUMENT, score=score, cited=False
+    )
 
 
 def ids(chunks: list[ScoredChunk]) -> list[str]:
@@ -29,7 +31,9 @@ def test_rrf_rewards_chunks_ranked_well_in_several_lists():
 
 def test_rrf_ignores_the_original_score_scales():
     # A huge ts_rank score must not beat a chunk that is first in both lists.
-    fused = retrieval.reciprocal_rank_fusion([[chunk("A", 0.9), chunk("B", 0.1)], [chunk("A", 0.01), chunk("B", 99.0)]], top_k=2)
+    fused = retrieval.reciprocal_rank_fusion(
+        [[chunk("A", 0.9), chunk("B", 0.1)], [chunk("A", 0.01), chunk("B", 99.0)]], top_k=2
+    )
 
     assert ids(fused) == ["A", "B"]
 
@@ -101,7 +105,9 @@ async def test_multi_query_searches_the_question_and_each_rewrite(chat_returns, 
 
     results = await retrieval.run("multi_query", None, "Where are the offices?", "m", top_k=2)
 
-    assert embedded == [["Where are the offices?", "bureaux de Mondria", "adresse de Mondria"]]  # blank rewrite dropped
+    assert embedded == [
+        ["Where are the offices?", "bureaux de Mondria", "adresse de Mondria"]
+    ]  # blank rewrite dropped
     assert len(searched) == 3
     assert ids(results) == ["MON-01-04", "MON-01-01"]
 

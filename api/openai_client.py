@@ -79,7 +79,9 @@ async def chat(
             raise ChatRefusal(message["refusal"])
         if choice.get("finish_reason") != "stop":
             # "length" means the answer hit MAX_ANSWER_TOKENS; truncated JSON can't be parsed.
-            raise RuntimeError(f"Chat completion did not finish (finish_reason={choice.get('finish_reason')})")
+            raise RuntimeError(
+                f"Chat completion did not finish (finish_reason={choice.get('finish_reason')})"
+            )
         content = (message.get("content") or "").strip()
         # Seen in production: structured output where accented letters came back as "\u0000"
         # ("employés" -> "employ\u0000s"), intermittently. Postgres rejects NUL characters and the

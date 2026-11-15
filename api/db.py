@@ -126,7 +126,10 @@ async def search(
 ) -> list[ScoredChunk]:
     """Vector search. <=> is cosine distance (0 = same direction), so the closest chunks come
     first with ASC; the score shown to users is the cosine similarity, 1 - distance."""
-    return [chunk for chunk, _ in await search_with_embeddings(connection, query_embedding, model, top_k, collection)]
+    return [
+        chunk
+        for chunk, _ in await search_with_embeddings(connection, query_embedding, model, top_k, collection)
+    ]
 
 
 async def search_with_embeddings(
@@ -220,8 +223,16 @@ async def get_upload(connection: psycopg.AsyncConnection, collection: str) -> Up
     if row is None:
         return None
     return Upload(
-        collection=row[0], title=row[1], file=row[2], kind=row[3], size_bytes=row[4], sections=row[5],
-        language=row[6], summary=row[7], suggested_questions=row[8], expires_at=row[9].isoformat(),
+        collection=row[0],
+        title=row[1],
+        file=row[2],
+        kind=row[3],
+        size_bytes=row[4],
+        sections=row[5],
+        language=row[6],
+        summary=row[7],
+        suggested_questions=row[8],
+        expires_at=row[9].isoformat(),
     )
 
 

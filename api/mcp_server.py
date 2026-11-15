@@ -44,7 +44,9 @@ class AskResult(TypedDict):
 
 
 @server.tool()
-async def search_mondria_docs(query: str, top_k: int = 4, strategy: Strategy | None = None) -> list[SearchResult]:
+async def search_mondria_docs(
+    query: str, top_k: int = 4, strategy: Strategy | None = None
+) -> list[SearchResult]:
     """Semantic search over the Mondria knowledge base (French documents).
 
     Use it first, before any web search, for any question about Mondria (the Québec IT,

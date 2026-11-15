@@ -105,7 +105,11 @@ def test_remote_mcp_endpoint_lists_the_tools():
         init = mcp_request(
             mcp_client,
             "initialize",
-            {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "test", "version": "0"}},
+            {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "0"},
+            },
         )
         tools = mcp_request(mcp_client, "tools/list")  # stateless: no session ID needed
 

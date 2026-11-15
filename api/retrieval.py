@@ -41,7 +41,9 @@ def default_strategy() -> Strategy:
     return value  # type: ignore[return-value]
 
 
-def reciprocal_rank_fusion(rankings: list[list[ScoredChunk]], top_k: int, k: int = RRF_K) -> list[ScoredChunk]:
+def reciprocal_rank_fusion(
+    rankings: list[list[ScoredChunk]], top_k: int, k: int = RRF_K
+) -> list[ScoredChunk]:
     """Merges ranked lists: each chunk scores the sum of 1 / (k + rank) over the lists it appears
     in. Only ranks matter, so lists with incomparable scores (cosine vs ts_rank) fuse fairly."""
     scores: dict[str, float] = {}
@@ -51,7 +53,9 @@ def reciprocal_rank_fusion(rankings: list[list[ScoredChunk]], top_k: int, k: int
             scores[chunk["id"]] = scores.get(chunk["id"], 0.0) + 1 / (k + rank)
             chunks.setdefault(chunk["id"], chunk)
     ordered = sorted(scores, key=lambda section_id: (-scores[section_id], section_id))
-    return [ScoredChunk(**{**chunks[section_id], "score": scores[section_id]}) for section_id in ordered[:top_k]]
+    return [
+        ScoredChunk(**{**chunks[section_id], "score": scores[section_id]}) for section_id in ordered[:top_k]
+    ]
 
 
 def dot(a: list[float], b: list[float]) -> float:
@@ -70,6 +74,7 @@ def maximal_marginal_relevance(
     remaining = list(candidates)
     picked: list[tuple[ScoredChunk, list[float]]] = []
     while remaining and len(picked) < top_k:
+
         def mmr_score(candidate: tuple[ScoredChunk, list[float]]) -> float:
             redundancy = max((dot(candidate[1], other[1]) for other in picked), default=0.0)
             return lambda_ * dot(query_embedding, candidate[1]) - (1 - lambda_) * redundancy
@@ -103,7 +108,9 @@ RERANK_SCHEMA = {
 }
 
 
-MONDRIA_SUBJECT = "a knowledge base about the company Mondria (IT services, cybersecurity, AI), written in French"
+MONDRIA_SUBJECT = (
+    "a knowledge base about the company Mondria (IT services, cybersecurity, AI), written in French"
+)
 
 
 async def rewrite_question(question: str, subject: str = MONDRIA_SUBJECT) -> list[str]:
@@ -143,7 +150,9 @@ async def rerank_with_llm(question: str, candidates: list[ScoredChunk], top_k: i
         json_schema=RERANK_SCHEMA,
     )
     by_id = {chunk["id"]: chunk for chunk in candidates}
-    ordered_ids = [section_id for section_id in dict.fromkeys(json.loads(raw)["ranked_ids"]) if section_id in by_id]
+    ordered_ids = [
+        section_id for section_id in dict.fromkeys(json.loads(raw)["ranked_ids"]) if section_id in by_id
+    ]
     ordered_ids += [chunk["id"] for chunk in candidates if chunk["id"] not in ordered_ids]
     total = len(ordered_ids)
     return [
@@ -167,7 +176,9 @@ async def run(
     if strategy == "multi_query":
         variants = await rewrite_question(question, subject)
         embeddings = await embed([question, *variants], model)  # one batch call
-        rankings = [await db.search(connection, embedding, model, CANDIDATES, collection) for embedding in embeddings]
+        rankings = [
+            await db.search(connection, embedding, model, CANDIDATES, collection) for embedding in embeddings
+        ]
         return reciprocal_rank_fusion(rankings, top_k)
 
     [query_embedding] = await embed([question], model)
@@ -183,7 +194,9 @@ async def run(
         return await rerank_with_llm(question, candidates, top_k)
 
     if strategy == "mmr":
-        candidates = await db.search_with_embeddings(connection, query_embedding, model, CANDIDATES, collection)
+        candidates = await db.search_with_embeddings(
+            connection, query_embedding, model, CANDIDATES, collection
+        )
         return maximal_marginal_relevance(query_embedding, candidates, top_k)
 
     rankings = [
