@@ -57,9 +57,10 @@ function timeLeft(expiresAt: string, now: number): string {
 
 async function errorMessage(response: Response): Promise<string> {
   try {
-    const body = (await response.json()) as { detail?: unknown };
-    if (typeof body.detail === "string") {
-      return body.detail;
+    const body = (await response.json()) as { error?: { message?: unknown }; detail?: unknown };
+    const message = body.error?.message ?? body.detail;
+    if (typeof message === "string") {
+      return message;
     }
   } catch {
     // fall through

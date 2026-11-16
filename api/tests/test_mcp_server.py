@@ -1,29 +1,47 @@
-import pytest
+from fastapi.testclient import TestClient
 
-pytest.importorskip("mcp")
-
-import mcp_server  # noqa: E402
-from db import Document, ScoredChunk  # noqa: E402
+from app.domain import Document, ScoredChunk
+from app.main import create_app
+from app.services import rag
 
 DOCUMENT = Document(id="MON-01", title="Entreprise Mondria", file="01.md", source_urls=[])
 
 
-@pytest.mark.anyio
-async def test_search_tool_returns_sections_and_clamps_top_k(monkeypatch):
-    calls = {}
+def test_search_tool_clamps_top_k_and_passes_the_strategy(settings, monkeypatch):
+    calls: dict[str, object] = {}
 
-    async def fake_retrieve(query: str, top_k: int, strategy=None):
-        calls["top_k"] = top_k
-        calls["strategy"] = strategy
-        return [ScoredChunk(id="MON-01-04", title="Coordonnées", text="...", document=DOCUMENT, score=0.64567, cited=False)]
+    async def fake_retrieve(runtime, query, top_k=rag.TOP_K, strategy=None, collection="mondria"):
+        calls.update(top_k=top_k, strategy=strategy)
+        return [
+            ScoredChunk(
+                id="MON-01-04", title="Coordonnées", text="...", document=DOCUMENT, score=0.64567, cited=False
+            )
+        ]
 
-    monkeypatch.setattr(mcp_server.rag, "retrieve", fake_retrieve)
+    monkeypatch.setattr(rag, "retrieve", fake_retrieve)
 
-    results = await mcp_server.search_mondria_docs("offices", top_k=50, strategy="hybrid")
+    with TestClient(create_app(settings)) as client:
+        response = client.post(
+            "/api/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_mondria_docs",
+                    "arguments": {"query": "offices", "top_k": 50, "strategy": "hybrid"},
+                },
+            },
+            headers={"Accept": "application/json, text/event-stream"},
+        )
 
-    assert calls["top_k"] == 10
-    assert calls["strategy"] == "hybrid"
-    assert results == [
-        {"id": "MON-01-04", "title": "Coordonnées", "document": "Entreprise Mondria", "score": 0.646, "text": "..."}
+    assert calls == {"top_k": 10, "strategy": "hybrid"}
+    assert response.json()["result"]["structuredContent"]["result"] == [
+        {
+            "id": "MON-01-04",
+            "title": "Coordonnées",
+            "document": "Entreprise Mondria",
+            "score": 0.646,
+            "text": "...",
+        }
     ]
-

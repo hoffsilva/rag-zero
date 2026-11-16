@@ -12,7 +12,7 @@ permissions:
 # Actions are pinned to full commit SHAs (tags can be moved); the comment shows the version.
 jobs:
   api:
-    name: API tests (Python + pgvector)
+    name: API (lint, types, tests with pgvector)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -40,6 +40,9 @@ jobs:
             api/requirements.txt
             api/requirements-dev.txt
       - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy
       # No OpenAI key here: the suite blocks real API calls. TEST_DATABASE_URL enables the
       # pgvector integration tests against the service container above.
       - run: pytest -v

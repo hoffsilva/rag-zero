@@ -20,6 +20,9 @@ export function SiteHeader() {
           <Link href="/evaluation" className={NAV_LINK}>
             Évaluation
           </Link>
+          <a href="/api/docs" className={`${NAV_LINK} hidden sm:inline`}>
+            API
+          </a>
           <a href="https://github.com/hoffsilva/rag-zero" className={`${NAV_LINK} hidden sm:inline`}>
             Code source
           </a>

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import rag
+from app.services import indexing as rag
 
 SAMPLE = """---
 id: MON-09

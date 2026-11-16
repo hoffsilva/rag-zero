@@ -10,7 +10,9 @@ The project has two parts:
 
 - **`api/`**: the RAG backend in Python (FastAPI). Chunking, indexing, retrieval, prompt and generation all live here. Chunks and embeddings are stored in Postgres with pgvector.
 - **`web/`**: the Next.js frontend: the Mondria demo, a [/documents page](https://rag-zero.vercel.app/documents) where visitors upload their own file, and the evaluation report. It only calls the API.
-- **`api/mcp_server.py`**: an MCP server that exposes the same knowledge base as tools to MCP clients such as Claude Code, remotely at `/api/mcp` or locally over stdio.
+- **MCP server** (`api/app/mcp.py`): exposes the same knowledge base as tools to MCP clients such as Claude Code, remotely at `/api/mcp` or locally over stdio.
+
+The REST API is documented with Swagger at [/api/docs](https://rag-zero.vercel.app/api/docs) (ReDoc at `/api/redoc`, schema at `/api/openapi.json`).
 
 Both `api/` and `web/` deploy as one Vercel project through [Vercel Services](https://vercel.com/docs/services): `/api/*` goes to Python, everything else to Next.js.
 
@@ -45,13 +47,13 @@ flowchart LR
 
 The [/documents page](https://rag-zero.vercel.app/documents) runs the same pipeline on a file the visitor uploads (`.md`, `.txt` or `.pdf`, up to 1 MB), while the Mondria demo stays a closed knowledge base.
 
-- **Ingestion** (`api/documents.py`): text extraction (UTF-8, or `pypdf` for PDFs; scanned PDFs without text are rejected), then generic chunking: one chunk per markdown heading, and long sections or texts without headings cut into ~800-character pieces with ~150 characters of overlap, preferring paragraph and sentence boundaries. Chunks get `DOC-01-NN` IDs, so citations work exactly like the Mondria ones. Embeddings go in one batch call, and one structured chat call produces the summary, language and three suggested questions shown on the page.
+- **Ingestion** (`api/app/services/ingestion.py`): text extraction (UTF-8, or `pypdf` for PDFs; scanned PDFs without text are rejected), then generic chunking: one chunk per markdown heading, and long sections or texts without headings cut into ~800-character pieces with ~150 characters of overlap, preferring paragraph and sentence boundaries. Chunks get `DOC-01-NN` IDs, so citations work exactly like the Mondria ones. Embeddings go in one batch call, and one structured chat call produces the summary, language and three suggested questions shown on the page.
 - **Isolation.** Each upload gets its own collection, `upload-<128 random bits>`, stored in the same `chunks` table (the primary key is now collection, section ID and model). Only the browser that uploaded the file knows the ID, every search filters on it, and `POST /api/ask` accepts only `mondria` or a well-formed upload ID that exists. Uploads expire after 24 hours; expired rows are deleted on the next upload, so no scheduled job is needed.
 - **Limits**: 1 MB, 100 chunks, three formats, generic errors for internal failures, and the Firewall rate limit. One lesson from testing: with a strict JSON schema, the model's description of a French document intermittently came back with accented letters missing or replaced by NUL characters ("employés" → "employ\u0000s"), which Postgres text columns also reject. The description now uses JSON mode with the fields validated in code, the chat client retries output that contains NUL characters, and extracted text is cleaned before being stored.
 
 ## Retrieval strategies
 
-`api/retrieval.py` implements six ways to pick the sections, selectable per request (`strategy` in `POST /api/ask`, the MCP search tool, and a menu on the page) and measured side by side by the evaluation:
+`api/app/services/retrieval.py` implements six ways to pick the sections, selectable per request (`strategy` in `POST /api/ask`, the MCP search tool, and a menu on the page) and measured side by side by the evaluation:
 
 | strategy | how it works | extra cost |
 |---|---|---|
@@ -67,18 +69,27 @@ The [/documents page](https://rag-zero.vercel.app/documents) runs the same pipel
 ```
 api/
   mondria-rag-docs/       Knowledge base (5 Markdown files, French)
-  main.py                 FastAPI app: POST /api/ask, GET /api/health, /api/mcp
-  rag.py                  Chunking, indexing, prompt and generation
-  retrieval.py            The six retrieval strategies, RRF and MMR
-  documents.py            Uploads: extraction, generic chunking, summary, expiry
-  db.py                   Postgres access: schema, upsert, vector search
-  schema.sql              chunks table, vector(1536) column, HNSW index
-  openai_client.py        Embeddings and chat calls
+  schema.sql              chunks and uploads tables, vector(1536), HNSW and GIN indexes
+  main.py                 Entrypoint for Vercel and uvicorn (main:app)
+  mcp_server.py           MCP over stdio (for Claude Code)
   build_index.py          Indexes the docs into Postgres (idempotent)
-  mcp_server.py           MCP tools (remote at /api/mcp, or stdio): search_mondria_docs, ask_mondria
+  app/
+    main.py               create_app(): OpenAPI, routers, error handlers, middleware, lifespan, MCP mount
+    config.py             Settings (pydantic-settings): environment, then api/.env.local
+    runtime.py            Settings + OpenAI client + database, opened once per process
+    schemas.py            Request and response models (the Swagger documentation)
+    domain.py             Internal types and constants
+    errors.py             Domain exceptions and the JSON error format
+    logging.py            Request ID middleware and one JSON log line per request
+    mcp.py                MCP tools: search_mondria_docs, ask_mondria
+    routers/              HTTP layer: ask, documents, health
+    services/             rag, retrieval (six strategies), indexing, ingestion (uploads)
+    repositories/         SQL: connection and schema, chunks, uploads
+    clients/openai.py     Embeddings and chat over httpx, as an async context manager
   eval/questions.json     Evaluation set (29 questions)
   eval/run_eval.py        Hit rate, MRR, threshold FP/FN, citation compliance
-  tests/                  pytest suite (unit, API, Postgres integration)
+  tests/                  pytest suite (unit, API, golden, Postgres integration)
+  ruff.toml, mypy.ini     Lint, format and strict type checking
 web/
   app/page.tsx            Demo page
   app/evaluation/page.tsx Evaluation report page
@@ -86,8 +97,17 @@ web/
   components/ask-form.tsx Question UI, calls /api/ask
   data/evaluation.json    Saved evaluation results
 vercel.json               Services: /api/* → api, the rest → web
-.github/workflows/ci.yml  Tests, typecheck, lint and build on every PR
+.github/workflows/ci.yml  Lint, types, tests and the web build on every PR
 ```
+
+### How the API code is organized
+
+Each layer only calls the one below it. Routers parse the request and return a response model; services hold the RAG logic and receive their dependencies as arguments; repositories run SQL on a connection the caller opens, so transactions stay in the services (indexing runs under an advisory lock, and an upload's chunks and metadata are written together). Nothing is a module-level singleton: `create_app()` opens one runtime (settings, an OpenAI client with its own `httpx` connection pool, the database state) in the FastAPI lifespan, and the MCP stdio server, the indexer and the evaluation each open their own.
+
+- **Configuration**: `Settings` reads environment variables, then `api/.env.local`. Importing it validates nothing; each credential is required when it's used, so the health check and the tests run without an OpenAI key. Empty variables count as unset.
+- **Errors**: every REST error has the same body, `{"detail": "...", "error": {"code", "message", "request_id"}}`. `detail` stays for clients that read the old format. Validation errors list the fields; unexpected errors return a generic 500 and log the stack trace with the same request ID. The MCP JSON-RPC errors and the Firewall's 429 keep their own formats.
+- **Logging**: a pure ASGI middleware (it doesn't buffer uploads or the MCP stream) reuses a valid `X-Request-ID` or generates one, returns it in the response header and writes one JSON line per request with the method, the route template (`/api/documents/{collection}`, never a real collection ID), the status and the duration. Questions, documents and keys are never logged.
+- **Types**: mypy in strict mode with the Pydantic plugin. Postgres rows and model JSON become typed values at the repository and client boundaries.
 
 ## Running locally
 
@@ -103,16 +123,16 @@ docker run -d --name rag-db -e POSTGRES_PASSWORD=<password> -p 5433:5432 pgvecto
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r api/requirements.txt uvicorn python-dotenv
+pip install -r api/requirements.txt -r api/requirements-dev.txt uvicorn
 cd api
 cp .env.example .env.local    # fill in OPENAI_API_KEY and DATABASE_URL
-uvicorn main:app --reload --port 8000 --env-file .env.local
+uvicorn main:app --reload --port 8000   # Swagger at http://localhost:8000/api/docs
 ```
 
 The API indexes the docs on its first request. To re-index after changing the docs:
 
 ```bash
-set -a && source .env.local && set +a && python build_index.py
+python build_index.py
 ```
 
 **Frontend**, in another terminal. In development, Next.js forwards `/api/*` to `localhost:8000`:
@@ -125,7 +145,7 @@ bun dev                       # http://localhost:3000
 
 ## MCP server
 
-`api/mcp_server.py` exposes the knowledge base over the [Model Context Protocol](https://modelcontextprotocol.io/), so an AI assistant can query it on its own:
+The MCP server (`api/app/mcp.py`) exposes the knowledge base over the [Model Context Protocol](https://modelcontextprotocol.io/), so an AI assistant can query it on its own:
 
 - **`search_mondria_docs(query, top_k)`**: retrieval only. Returns the closest sections with their ID, document and score; the assistant writes the answer itself and cites the IDs.
 - **`ask_mondria(question)`**: the full RAG pipeline, same answer as the web demo.
@@ -200,19 +220,24 @@ The larger model didn't help, so the app stays on the small one.
 
 A threshold only catches off-topic questions (weather 0.31, poutine 0.13). On-topic questions without an answer in the docs (CEO 0.53, headcount 0.53) score like answerable ones (lowest 0.40), so no threshold separates them: the LLM's "answer only from the context" rule is what refuses them. A threshold around 0.35 would still be useful as a cheap filter that skips the chat call for off-topic questions, with no false negatives on this set.
 
-## Tests
+## Tests and checks
 
 ```bash
-cd api && pytest                                          # 56 tests, database tests skipped
-TEST_DATABASE_URL=postgresql://postgres:<password>@localhost:5433/postgres pytest   # all 65
+cd api
+ruff check . && ruff format --check .
+mypy
+pytest                                                    # 69 tests, database tests skipped
+TEST_DATABASE_URL=postgresql://postgres:<password>@localhost:5433/postgres pytest   # all 79
 ```
 
-65 tests, under a second. They never call OpenAI: a fixture makes any real API call fail the test, and `.env.local` isn't loaded during the run.
+79 tests, under a second. They never call OpenAI: the OpenAI client is built with an `httpx` transport that fails the test on any real request, and `.env.local` isn't loaded during the run.
 
+- **Golden end-to-end** (Postgres): the real app with a deterministic fake OpenAI, fixing the output of all six strategies, `/api/ask` and the upload. They were written before the refactoring into layers and passed unchanged after every step.
 - **Chunking**: frontmatter parsing, section boundaries (the trailing `Documents associés` and `Sources` don't leak into the last section), and the real knowledge base (21 unique sections, each with its document and source URLs).
 - **RAG pipeline**: with retrieval and the chat call replaced by fakes, the model receives the question and every retrieved section, and cited sections are detected with or without brackets. With the database faked, the first request indexes an empty table, reuses existing chunks, and re-indexes when `OPENAI_EMBEDDING_MODEL` changes (the Vercel redeploy path) under the advisory lock; a failed indexing rolls back, closes the connection and leaves the instance not ready. Citations are matched as whole IDs, and a model refusal becomes the answer.
 - **OpenAI client**: `text-embedding-3` models are asked for 1536 dimensions (the column size), `ada-002` isn't, vectors come back in input order; answers are capped with `max_completion_tokens`, refusals and truncated answers raise instead of returning unparseable content, and output with NUL characters is retried.
-- **API** (FastAPI `TestClient`): health check, 422 for empty or too long questions before the pipeline runs, internal errors returned as a generic 500 without leaking details, and the remote MCP endpoint answering `initialize` and `tools/list`.
+- **API** (FastAPI `TestClient`): health check, 422 with the invalid fields for empty or too long questions, a generic 500 that leaks nothing and carries the same request ID in the body, header and log, request IDs reused only when valid, the route template in the access log, the OpenAPI schema, two apps running independently, and the remote MCP endpoint (`tools/list`, `tools/call`, a failing tool).
+- **Settings**: missing and empty variables, defaults, and environment over `.env.local`.
 - **Evaluation metrics**: hit rate, MRR, document hit rate and the false positive / negative counts on hand-made data.
 - **Uploads**: extraction of Markdown, text and a PDF generated in the test (plus scanned, broken, too large, wrong type and non-UTF-8 files), chunking by headings and by size with overlap, the upload endpoint with fakes (private collection, NUL characters removed), collection isolation and expiry on Postgres, and 404/422 for unknown or malformed collections.
 - **Retrieval strategies**: RRF ranks and scale independence, MMR dropping a near-duplicate, the LLM reranking order (unknown and repeated IDs ignored, unlisted candidates kept), the multi-query flow with fakes, and keyword search on Postgres (French stemming, short words ignored).
@@ -221,7 +246,7 @@ TEST_DATABASE_URL=postgresql://postgres:<password>@localhost:5433/postgres pytes
 
 ### CI
 
-`.github/workflows/ci.yml` runs on every pull request and push to `main`: the full pytest suite against a `pgvector/pgvector:pg17` service container (so the database tests run too, with no OpenAI key), and the web app's typecheck, lint and production build.
+`.github/workflows/ci.yml` runs on every pull request and push to `main`: Ruff (lint and format), mypy, the full pytest suite against a `pgvector/pgvector:pg17` service container (so the database tests run too, with no OpenAI key), and the web app's typecheck, lint and production build.
 
 ## Deploying to Vercel
 
