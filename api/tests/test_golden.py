@@ -20,7 +20,11 @@ from pathlib import Path
 
 import psycopg
 import pytest
+from conftest import openai_transport
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
+
+from app.main import create_app
 
 GOLDEN_FILE = Path(__file__).parent / "golden" / "api.json"
 STRATEGIES = ["vector", "keyword", "hybrid", "mmr", "multi_query", "rerank"]
@@ -41,7 +45,7 @@ pytestmark = pytest.mark.db
 def fake_embedding(text: str) -> list[float]:
     vector = [0.0] * 1536
     for word in re.findall(r"\w+", text.lower()):
-        vector[int(hashlib.md5(word.encode()).hexdigest(), 16) % 1536] += 1.0
+        vector[int(hashlib.md5(word.encode(), usedforsecurity=False).hexdigest(), 16) % 1536] += 1.0
     norm = math.sqrt(sum(v * v for v in vector)) or 1.0
     return [v / norm for v in vector]
 
@@ -68,7 +72,7 @@ def fake_chat_content(body: dict) -> str:
     raise AssertionError(f"unexpected chat call: {schema}")
 
 
-async def fake_openai(path: str, body: dict) -> dict:
+def fake_openai(path: str, body: dict) -> dict:
     if path == "/embeddings":
         return {
             "data": [{"index": i, "embedding": fake_embedding(text)} for i, text in enumerate(body["input"])]
@@ -82,21 +86,8 @@ async def fake_openai(path: str, body: dict) -> dict:
     raise AssertionError(f"unexpected OpenAI call: {path}")
 
 
-def install_fake_openai(monkeypatch) -> None:
-    """The only line that follows the refactoring: where the OpenAI HTTP boundary lives."""
-    import openai_client
-
-    monkeypatch.setattr(openai_client, "_post", fake_openai)
-
-
-def reset_app_state(monkeypatch) -> None:
-    import rag
-
-    monkeypatch.setattr(rag, "_ready_model", None)
-
-
 @pytest.fixture
-def client(monkeypatch):
+def client(settings):
     url = os.environ.get("TEST_DATABASE_URL")
     if not url:
         pytest.skip("TEST_DATABASE_URL is not set")
@@ -104,17 +95,11 @@ def client(monkeypatch):
     with psycopg.connect(url, autocommit=True) as admin:
         admin.execute(f'CREATE SCHEMA "{schema}"')
     separator = "&" if "?" in url else "?"
-    monkeypatch.setenv("DATABASE_URL", f"{url}{separator}options=-csearch_path%3D{schema}%2Cpublic")
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("OPENAI_CHAT_MODEL", "fake-chat")
-    monkeypatch.setenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
-    monkeypatch.setenv("RETRIEVAL_STRATEGY", "rerank")
-    install_fake_openai(monkeypatch)
-    reset_app_state(monkeypatch)
-    import main
-
+    golden_settings = settings.model_copy(
+        update={"database_url": SecretStr(f"{url}{separator}options=-csearch_path%3D{schema}%2Cpublic")}
+    )
     try:
-        with TestClient(main.app) as test_client:
+        with TestClient(create_app(golden_settings, openai_transport(fake_openai))) as test_client:
             yield test_client
     finally:
         with psycopg.connect(url, autocommit=True) as admin:

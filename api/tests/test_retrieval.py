@@ -1,9 +1,12 @@
 import json
+from typing import Any, cast
 
 import pytest
 
-import retrieval
-from db import Document, ScoredChunk
+from app.clients.openai import OpenAIClient
+from app.domain import Document, ScoredChunk
+from app.repositories import chunks as chunk_repository
+from app.services import retrieval
 
 DOCUMENT = Document(id="MON-01", title="Entreprise Mondria", file="01.md", source_urls=[])
 
@@ -60,62 +63,55 @@ def test_mmr_with_lambda_1_is_plain_relevance_order():
     assert ids(picked) == ["B", "C", "A"]
 
 
-@pytest.fixture
-def chat_returns(monkeypatch):
-    sent: list = []
+class FakeOpenAI:
+    """Answers chat calls with a fixed JSON reply and embeds each input as [index]."""
 
-    def set_reply(reply: dict) -> list:
-        async def fake_chat(messages, json_schema=None):
-            sent.append({"messages": messages, "json_schema": json_schema})
-            return json.dumps(reply)
+    embedding_model = "m"
 
-        monkeypatch.setattr(retrieval, "chat", fake_chat)
-        return sent
+    def __init__(self, reply: dict) -> None:
+        self.reply = reply
+        self.sent: list[dict] = []
+        self.embedded: list[list[str]] = []
 
-    return set_reply
+    async def chat(self, messages, json_schema=None, json_mode=False):
+        self.sent.append({"messages": messages, "json_schema": json_schema})
+        return json.dumps(self.reply)
+
+    async def embed(self, inputs, model=None):
+        self.embedded.append(inputs)
+        return [[float(i)] for i in range(len(inputs))]
 
 
 @pytest.mark.anyio
-async def test_rerank_follows_the_llm_order_and_keeps_unlisted_candidates(chat_returns):
-    sent = chat_returns({"ranked_ids": ["C", "UNKNOWN", "A", "C"]})  # unknown and repeated IDs
+async def test_rerank_follows_the_llm_order_and_keeps_unlisted_candidates():
+    openai = FakeOpenAI({"ranked_ids": ["C", "UNKNOWN", "A", "C"]})  # unknown and repeated IDs
 
-    ranked = await retrieval.rerank_with_llm("q", [chunk("A"), chunk("B"), chunk("C")], top_k=3)
+    ranked = await retrieval.rerank_with_llm(
+        cast(OpenAIClient, openai), "q", [chunk("A"), chunk("B"), chunk("C")], top_k=3
+    )
 
     assert ids(ranked) == ["C", "A", "B"]  # B was left out by the model: kept, at the end
     assert [c["score"] for c in ranked] == pytest.approx([1.0, 2 / 3, 1 / 3])
-    assert "[B] texte B" in sent[0]["messages"][-1]["content"]
+    assert "[B] texte B" in openai.sent[0]["messages"][-1]["content"]
 
 
 @pytest.mark.anyio
-async def test_multi_query_searches_the_question_and_each_rewrite(chat_returns, monkeypatch):
-    chat_returns({"queries": ["bureaux de Mondria", "adresse de Mondria", "  "]})
-    embedded: list[list[str]] = []
+async def test_multi_query_searches_the_question_and_each_rewrite(monkeypatch):
+    openai = FakeOpenAI({"queries": ["bureaux de Mondria", "adresse de Mondria", "  "]})
     searched: list[list[float]] = []
-
-    async def fake_embed(inputs, model):
-        embedded.append(inputs)
-        return [[float(i)] for i in range(len(inputs))]
 
     async def fake_search(connection, embedding, model, top_k, collection="mondria"):
         searched.append(embedding)
         return [chunk("MON-01-04")] if embedding == [0.0] else [chunk("MON-01-04"), chunk("MON-01-01")]
 
-    monkeypatch.setattr(retrieval, "embed", fake_embed)
-    monkeypatch.setattr(retrieval.db, "search", fake_search)
+    monkeypatch.setattr(chunk_repository, "search", fake_search)
 
-    results = await retrieval.run("multi_query", None, "Where are the offices?", "m", top_k=2)
+    results = await retrieval.run(
+        "multi_query", cast(OpenAIClient, openai), cast(Any, None), "Where are the offices?", top_k=2
+    )
 
-    assert embedded == [
+    assert openai.embedded == [
         ["Where are the offices?", "bureaux de Mondria", "adresse de Mondria"]
     ]  # blank rewrite dropped
     assert len(searched) == 3
     assert ids(results) == ["MON-01-04", "MON-01-01"]
-
-
-def test_default_strategy_comes_from_the_environment(monkeypatch):
-    monkeypatch.setenv("RETRIEVAL_STRATEGY", "keyword")
-    assert retrieval.default_strategy() == "keyword"
-
-    monkeypatch.setenv("RETRIEVAL_STRATEGY", "bm25")
-    with pytest.raises(RuntimeError):
-        retrieval.default_strategy()

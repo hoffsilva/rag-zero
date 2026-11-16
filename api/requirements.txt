@@ -5,3 +5,4 @@ pgvector==0.5.1
 mcp==2.3.0
 pypdf==7.1.0
 python-multipart==0.0.33
+pydantic-settings==2.16.3

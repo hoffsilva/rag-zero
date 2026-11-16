@@ -1,11 +1,15 @@
 import json
 
 import pytest
+from conftest import openai_transport
 from fastapi.testclient import TestClient
 
-import documents
-import main
-from db import Document
+from app.domain import Document
+from app.errors import AppError
+from app.main import create_app
+from app.repositories import chunks as chunk_repository
+from app.repositories import uploads as upload_repository
+from app.services import ingestion as documents
 
 DOCUMENT = Document(id="DOC-01", title="Guide", file="guide.md", source_urls=[])
 
@@ -16,7 +20,8 @@ def make_pdf(text: str | None) -> bytes:
     objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R "
+        b"/Resources << /Font << /F1 5 0 R >> >> >>",
         b"<< /Length " + str(len(content)).encode() + b" >>\nstream\n" + content + b"\nendstream",
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     ]
@@ -62,7 +67,7 @@ def test_extracts_text_from_a_pdf():
     ],
 )
 def test_rejects_unsupported_too_large_or_empty_files(filename, data, status):
-    with pytest.raises(documents.DocumentError) as error:
+    with pytest.raises(AppError) as error:
         documents.extract_text(filename, data)
 
     assert error.value.status_code == status
@@ -112,23 +117,21 @@ def test_split_by_size_prefers_sentence_boundaries():
 # --- API ------------------------------------------------------------------------------------
 
 
+def fake_openai(path: str, body: dict) -> dict:
+    if path == "/embeddings":
+        return {"data": [{"index": i, "embedding": [0.0] * 1536} for i, _ in enumerate(body["input"])]}
+    # The description call. A NUL character, as the model once produced in a summary:
+    # Postgres would reject it.
+    content = json.dumps(
+        {"language": "français", "summary": "Un\u0000 guide.", "suggested_questions": ["Q1 ?", "", "Q2 ?"]}
+    )
+    return {"choices": [{"finish_reason": "stop", "message": {"content": content, "refusal": None}}]}
+
+
 @pytest.fixture
-def fake_backend(monkeypatch):
-    """Fakes embeddings, the description chat call and the database writes."""
-    saved = {}
-
-    async def fake_embed(inputs, model):
-        return [[0.0] * 1536 for _ in inputs]
-
-    async def fake_chat(messages, json_schema=None, json_mode=False):
-        # A NUL character, as the model once produced in a summary: Postgres would reject it.
-        return json.dumps(
-            {
-                "language": "français",
-                "summary": "Un\u0000 guide.",
-                "suggested_questions": ["Q1 ?", "", "Q2 ?"],
-            }
-        )
+def saved(monkeypatch):
+    """Fakes the database writes of the upload and records them."""
+    records: dict = {}
 
     class FakeConnection:
         async def __aenter__(self):
@@ -140,31 +143,33 @@ def fake_backend(monkeypatch):
         def transaction(self):
             return self
 
-    async def fake_open_connection():
+    async def fake_open_connection(runtime):
         return FakeConnection()
 
     async def fake_replace(connection, chunks, embeddings, model, collection):
-        saved["chunks"] = chunks
-        saved["collection"] = collection
+        records["chunks"] = chunks
+        records["collection"] = collection
 
     async def fake_save(connection, upload):
-        saved["upload"] = upload
+        records["upload"] = upload
 
     async def noop(connection):
         pass
 
-    monkeypatch.setattr(documents, "embed", fake_embed)
-    monkeypatch.setattr(documents, "chat", fake_chat)
     monkeypatch.setattr(documents, "open_connection", fake_open_connection)
-    monkeypatch.setattr(documents.db, "replace_chunks", fake_replace)
-    monkeypatch.setattr(documents.db, "save_upload", fake_save)
-    monkeypatch.setattr(documents.db, "delete_expired_uploads", noop)
-    monkeypatch.setenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
-    return saved
+    monkeypatch.setattr(chunk_repository, "replace_chunks", fake_replace)
+    monkeypatch.setattr(upload_repository, "save_upload", fake_save)
+    monkeypatch.setattr(upload_repository, "delete_expired_uploads", noop)
+    return records
 
 
-def test_upload_creates_a_private_collection(fake_backend):
-    client = TestClient(main.app)
+@pytest.fixture
+def client(settings):
+    with TestClient(create_app(settings, openai_transport(fake_openai))) as test_client:
+        yield test_client
+
+
+def test_upload_creates_a_private_collection(client, saved):
     markdown = "# Guide du télétravail\n\n## Horaires\n\nTrois jours.\n\n## Sécurité\n\nVPN obligatoire."
 
     response = client.post("/api/documents", files={"file": ("guide.md", markdown.encode(), "text/markdown")})
@@ -176,29 +181,28 @@ def test_upload_creates_a_private_collection(fake_backend):
     assert body["sections"] == ["Horaires", "Sécurité"]
     assert body["suggested_questions"] == ["Q1 ?", "Q2 ?"]  # blank question dropped
     assert body["summary"] == "Un guide."  # NUL removed
-    assert fake_backend["collection"] == body["collection"]
-    assert [c["id"] for c in fake_backend["chunks"]] == ["DOC-01-01", "DOC-01-02"]
+    assert saved["collection"] == body["collection"]
+    assert [c["id"] for c in saved["chunks"]] == ["DOC-01-01", "DOC-01-02"]
 
 
-def test_upload_reports_file_problems_with_their_status(fake_backend):
-    client = TestClient(main.app)
-
+def test_upload_reports_file_problems_with_their_status(client, saved):
     response = client.post("/api/documents", files={"file": ("photo.png", b"\x89PNG", "image/png")})
 
     assert response.status_code == 415
-    assert "Formats acceptés" in response.json()["detail"]
-    assert "upload" not in fake_backend
+    body = response.json()
+    assert body["error"]["code"] == "unsupported_file_type"
+    assert "Formats acceptés" in body["detail"]  # kept for compatibility
+    assert "upload" not in saved
 
 
-def test_unknown_or_malformed_collections_are_not_found(monkeypatch):
-    async def no_upload(collection):
+def test_unknown_or_malformed_collections_are_not_found(client, monkeypatch):
+    async def no_upload(runtime, collection):
         return None
 
     monkeypatch.setattr(documents, "get_upload", no_upload)
-    client = TestClient(main.app)
 
     assert client.get("/api/documents/upload-" + "0" * 32).status_code == 404
-    assert client.get("/api/documents/mondria").status_code == 404
+    assert client.get("/api/documents/mondria").json()["error"]["code"] == "document_not_found"
     response = client.post("/api/ask", json={"question": "q", "collection": "upload-" + "0" * 32})
     assert response.status_code == 404
     assert client.post("/api/ask", json={"question": "q", "collection": "someone-else"}).status_code == 422

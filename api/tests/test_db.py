@@ -12,8 +12,10 @@ import uuid
 import psycopg
 import pytest
 
-import db
-from db import Chunk, Document
+from app.domain import Chunk, Document, Upload
+from app.repositories import chunks as chunk_repository
+from app.repositories import uploads as upload_repository
+from app.repositories.database import ensure_schema
 
 pytestmark = [pytest.mark.db, pytest.mark.anyio]
 
@@ -51,7 +53,7 @@ async def connection():
     try:
         await conn.execute(f'CREATE SCHEMA "{schema}"')
         await conn.execute(f'SET search_path TO "{schema}", public')  # the vector type lives in public
-        await db.ensure_schema(conn)
+        await ensure_schema(conn)
         yield conn
     finally:
         try:
@@ -64,31 +66,31 @@ async def test_indexing_twice_does_not_duplicate_rows(connection):
     chunks = [chunk("MON-01-01"), chunk("MON-01-02")]
     embeddings = [unit_vector(0), unit_vector(1)]
 
-    await db.replace_chunks(connection, chunks, embeddings, MODEL)
-    await db.replace_chunks(connection, chunks, embeddings, MODEL)
+    await chunk_repository.replace_chunks(connection, chunks, embeddings, MODEL)
+    await chunk_repository.replace_chunks(connection, chunks, embeddings, MODEL)
 
-    assert await db.count_chunks(connection, MODEL) == 2
+    assert await chunk_repository.count_chunks(connection, MODEL) == 2
 
 
 async def test_reindexing_removes_sections_deleted_from_the_docs(connection):
-    await db.replace_chunks(
+    await chunk_repository.replace_chunks(
         connection, [chunk("MON-01-01"), chunk("MON-01-02")], [unit_vector(0), unit_vector(1)], MODEL
     )
 
-    await db.replace_chunks(connection, [chunk("MON-01-01")], [unit_vector(0)], MODEL)
+    await chunk_repository.replace_chunks(connection, [chunk("MON-01-01")], [unit_vector(0)], MODEL)
 
-    results = await db.search(connection, unit_vector(1), MODEL, top_k=5)
+    results = await chunk_repository.search(connection, unit_vector(1), MODEL, top_k=5)
     assert [r["id"] for r in results] == ["MON-01-01"]
 
 
 async def test_models_coexist_so_indexing_one_keeps_the_other(connection):
-    await db.replace_chunks(connection, [chunk("MON-01-01")], [unit_vector(0)], "small")
+    await chunk_repository.replace_chunks(connection, [chunk("MON-01-01")], [unit_vector(0)], "small")
 
-    await db.replace_chunks(connection, [chunk("MON-01-01")], [unit_vector(1)], "large")
+    await chunk_repository.replace_chunks(connection, [chunk("MON-01-01")], [unit_vector(1)], "large")
 
-    assert await db.count_chunks(connection, "small") == 1
-    assert await db.count_chunks(connection, "large") == 1
-    small = await db.search(connection, unit_vector(0), "small", top_k=1)
+    assert await chunk_repository.count_chunks(connection, "small") == 1
+    assert await chunk_repository.count_chunks(connection, "large") == 1
+    small = await chunk_repository.search(connection, unit_vector(0), "small", top_k=1)
     assert small[0]["score"] == pytest.approx(1.0)  # the small vectors were not overwritten
 
 
@@ -104,8 +106,8 @@ async def test_migrates_a_table_created_before_collections(connection):
         """
     )
 
-    await db.ensure_schema(connection)
-    await db.ensure_schema(connection)  # idempotent
+    await ensure_schema(connection)
+    await ensure_schema(connection)  # idempotent
 
     cursor = await connection.execute(
         """
@@ -118,14 +120,14 @@ async def test_migrates_a_table_created_before_collections(connection):
 
 
 async def test_search_orders_by_cosine_distance(connection):
-    await db.replace_chunks(
+    await chunk_repository.replace_chunks(
         connection,
         [chunk("MON-01-01"), chunk("MON-01-02"), chunk("MON-01-03")],
         [unit_vector(0), unit_vector(0, 1), unit_vector(2)],
         MODEL,
     )
 
-    results = await db.search(connection, unit_vector(0), MODEL, top_k=2)
+    results = await chunk_repository.search(connection, unit_vector(0), MODEL, top_k=2)
 
     assert [r["id"] for r in results] == ["MON-01-01", "MON-01-02"]
     assert results[0]["score"] == pytest.approx(1.0)  # same direction: distance 0
@@ -147,22 +149,28 @@ async def test_keyword_search_matches_french_word_forms(connection):
         text="Organismes sans but lucratif (OBNL) et commerce de détail.",
         document=DOCUMENT,
     )
-    await db.replace_chunks(connection, [office, nonprofits], [unit_vector(0), unit_vector(1)], MODEL)
+    await chunk_repository.replace_chunks(
+        connection, [office, nonprofits], [unit_vector(0), unit_vector(1)], MODEL
+    )
 
     # "bureau" (singular) matches "Bureaux" through French stemming; short words like "où" are ignored.
-    results = await db.keyword_search(connection, "Où est le bureau ?", MODEL, top_k=5)
+    results = await chunk_repository.keyword_search(connection, "Où est le bureau ?", MODEL, top_k=5)
     assert [r["id"] for r in results] == ["MON-01-04"]
 
-    results = await db.keyword_search(connection, "Travaillez-vous avec des OBNL ?", MODEL, top_k=5)
+    results = await chunk_repository.keyword_search(
+        connection, "Travaillez-vous avec des OBNL ?", MODEL, top_k=5
+    )
     assert [r["id"] for r in results] == ["MON-05-01"]
 
-    assert await db.keyword_search(connection, "?", MODEL, top_k=5) == []
+    assert await chunk_repository.keyword_search(connection, "?", MODEL, top_k=5) == []
 
 
 async def test_search_with_embeddings_returns_the_stored_vectors(connection):
-    await db.replace_chunks(connection, [chunk("MON-01-01")], [unit_vector(3)], MODEL)
+    await chunk_repository.replace_chunks(connection, [chunk("MON-01-01")], [unit_vector(3)], MODEL)
 
-    [(found, embedding)] = await db.search_with_embeddings(connection, unit_vector(3), MODEL, top_k=1)
+    [(found, embedding)] = await chunk_repository.search_with_embeddings(
+        connection, unit_vector(3), MODEL, top_k=1
+    )
 
     assert found["id"] == "MON-01-01"
     assert embedding[3] == pytest.approx(1.0)
@@ -170,26 +178,33 @@ async def test_search_with_embeddings_returns_the_stored_vectors(connection):
 
 
 async def test_collections_are_isolated(connection):
-    await db.replace_chunks(connection, [chunk("MON-01-01")], [unit_vector(0)], MODEL)  # mondria
+    await chunk_repository.replace_chunks(
+        connection, [chunk("MON-01-01")], [unit_vector(0)], MODEL
+    )  # mondria
     upload = "upload-" + "a" * 32
-    await db.replace_chunks(connection, [chunk("DOC-01-01")], [unit_vector(0)], MODEL, upload)
+    await chunk_repository.replace_chunks(connection, [chunk("DOC-01-01")], [unit_vector(0)], MODEL, upload)
 
-    assert [r["id"] for r in await db.search(connection, unit_vector(0), MODEL, top_k=5)] == ["MON-01-01"]
+    assert [r["id"] for r in await chunk_repository.search(connection, unit_vector(0), MODEL, top_k=5)] == [
+        "MON-01-01"
+    ]
     assert [
-        r["id"] for r in await db.search(connection, unit_vector(0), MODEL, top_k=5, collection=upload)
+        r["id"]
+        for r in await chunk_repository.search(connection, unit_vector(0), MODEL, top_k=5, collection=upload)
     ] == ["DOC-01-01"]
     # Re-indexing the Mondria base doesn't delete the upload's rows.
-    await db.replace_chunks(connection, [chunk("MON-01-01")], [unit_vector(0)], MODEL)
-    assert await db.count_chunks(connection, MODEL, upload) == 1
+    await chunk_repository.replace_chunks(connection, [chunk("MON-01-01")], [unit_vector(0)], MODEL)
+    assert await chunk_repository.count_chunks(connection, MODEL, upload) == 1
 
 
 async def test_expired_uploads_are_deleted(connection):
     fresh, old = "upload-" + "1" * 32, "upload-" + "2" * 32
     for collection in (fresh, old):
-        await db.replace_chunks(connection, [chunk("DOC-01-01")], [unit_vector(0)], MODEL, collection)
-        await db.save_upload(
+        await chunk_repository.replace_chunks(
+            connection, [chunk("DOC-01-01")], [unit_vector(0)], MODEL, collection
+        )
+        await upload_repository.save_upload(
             connection,
-            db.Upload(
+            Upload(
                 collection=collection,
                 title="T",
                 file="t.md",
@@ -209,10 +224,10 @@ async def test_expired_uploads_are_deleted(connection):
         "UPDATE uploads SET created_at = now() - interval '25 hours' WHERE collection = %s", (old,)
     )
 
-    assert await db.get_upload(connection, old) is None  # expired metadata is already hidden
-    await db.delete_expired_uploads(connection)
+    assert await upload_repository.get_upload(connection, old) is None  # expired metadata is already hidden
+    await upload_repository.delete_expired_uploads(connection)
 
-    assert await db.count_chunks(connection, MODEL, old) == 0
-    assert await db.count_chunks(connection, MODEL, fresh) == 1
-    kept = await db.get_upload(connection, fresh)
+    assert await chunk_repository.count_chunks(connection, MODEL, old) == 0
+    assert await chunk_repository.count_chunks(connection, MODEL, fresh) == 1
+    kept = await upload_repository.get_upload(connection, fresh)
     assert kept is not None and kept["sections"] == ["A"]
