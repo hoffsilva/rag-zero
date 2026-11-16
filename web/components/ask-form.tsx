@@ -2,9 +2,9 @@
 
 import { useState, type FormEvent } from "react";
 
-import { STRATEGIES, strategyLabel, type Strategy } from "@/lib/strategies";
+import { PIPELINES, STRATEGIES, pipelineLabel, strategyLabel, type Pipeline, type Strategy } from "@/lib/strategies";
 
-// Response of POST /api/ask, served by the Python API in api/main.py.
+// Response of POST /api/ask, served by the Python API (api/app/routers/ask.py).
 interface SourceDocument {
   id: string;
   title: string;
@@ -25,7 +25,11 @@ interface RagAnswer {
   answer: string;
   sources: Source[];
   strategy: Strategy;
+  pipeline: Pipeline;
 }
+
+const SELECT =
+  "rounded-full border border-ink/15 bg-navy-raised px-3 py-1.5 text-ink outline-none focus:border-ink/40";
 
 const DOCS_BASE_URL = "https://github.com/hoffsilva/rag-zero/blob/main/api/mondria-rag-docs";
 
@@ -110,6 +114,15 @@ export function AskForm({
   const [status, setStatus] = useState<Status>("idle");
   const [result, setResult] = useState<RagAnswer | null>(null);
   const [strategy, setStrategy] = useState<Strategy | "">("");
+  const [pipeline, setPipeline] = useState<Pipeline>("native");
+  const strategies = STRATEGIES.filter((option) => pipeline === "native" || option.inLangChain);
+
+  function changePipeline(next: Pipeline) {
+    setPipeline(next);
+    if (next === "langchain" && strategy && !STRATEGIES.find((option) => option.value === strategy)?.inLangChain) {
+      setStrategy("");
+    }
+  }
 
   async function ask(text: string) {
     const trimmed = text.trim();
@@ -124,7 +137,7 @@ export function AskForm({
       const response = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: trimmed, collection, ...(strategy && { strategy }) }),
+        body: JSON.stringify({ question: trimmed, collection, pipeline, ...(strategy && { strategy }) }),
       });
       if (response.status === 404) {
         setStatus("expired");
@@ -171,21 +184,33 @@ export function AskForm({
           </button>
         </form>
 
-        <label className="flex items-center gap-3 text-sm text-ink/70">
-          Stratégie de recherche
-          <select
-            value={strategy}
-            onChange={(event) => setStrategy(event.target.value as Strategy | "")}
-            className="rounded-full border border-ink/15 bg-navy-raised px-3 py-1.5 text-ink outline-none focus:border-ink/40"
-          >
-            <option value="">Par défaut</option>
-            {STRATEGIES.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-ink/70">
+          <label className="flex items-center gap-3">
+            Stratégie de recherche
+            <select
+              value={strategy}
+              onChange={(event) => setStrategy(event.target.value as Strategy | "")}
+              className={SELECT}
+            >
+              <option value="">Par défaut</option>
+              {strategies.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-3">
+            Implémentation
+            <select value={pipeline} onChange={(event) => changePipeline(event.target.value as Pipeline)} className={SELECT}>
+              {PIPELINES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
 
         <div className="flex flex-wrap gap-2">
           {examples.map((example) => (
@@ -210,7 +235,9 @@ export function AskForm({
             <span className="block size-2 bg-accent" aria-hidden />
             <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2">
               <Eyebrow>Réponse</Eyebrow>
-              <span className="text-xs text-ink/50">Recherche : {strategyLabel(result.strategy)}</span>
+              <span className="text-xs text-ink/50">
+                Recherche : {strategyLabel(result.strategy)} · {pipelineLabel(result.pipeline)}
+              </span>
             </div>
             <p className="mt-3 whitespace-pre-line text-lg leading-relaxed">{result.answer}</p>
           </div>

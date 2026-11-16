@@ -160,7 +160,7 @@ def not_available(strategy: Strategy) -> StrategyNotAvailableError:
 
 
 def build_retriever(
-    runtime: Runtime, connection: Connection, strategy: Strategy, collection: str
+    runtime: Runtime, connection: Connection, strategy: Strategy, collection: str, top_k: int = rag.TOP_K
 ) -> tuple[BaseRetriever, bool]:
     """The LangChain retriever for a strategy, and whether its results keep their own scores."""
     models = runtime.langchain
@@ -174,7 +174,7 @@ def build_retriever(
         return PgVectorRetriever(embeddings=models.embeddings, k=k, **common)
 
     if strategy == "vector":
-        return vector(rag.TOP_K), True
+        return vector(top_k), True
     if strategy == "hybrid":
         keyword = PgKeywordRetriever(k=CANDIDATES, **common)
         return EnsembleRetriever(
@@ -183,10 +183,10 @@ def build_retriever(
     if strategy == "multi_query":
         prompt = MULTI_QUERY_PROMPT.partial(subject=rag.subject_for(collection))
         return MultiQueryRetriever.from_llm(
-            retriever=vector(rag.TOP_K), llm=models.chat, prompt=prompt, include_original=True
+            retriever=vector(top_k), llm=models.chat, prompt=prompt, include_original=True
         ), False
     if strategy == "rerank":
-        compressor = AsyncListwiseRerank.from_llm(models.chat, top_n=rag.TOP_K)
+        compressor = AsyncListwiseRerank.from_llm(models.chat, top_n=top_k)
         return ContextualCompressionRetriever(
             base_compressor=compressor, base_retriever=vector(RERANK_CANDIDATES)
         ), False
@@ -194,12 +194,12 @@ def build_retriever(
 
 
 async def retrieve(
-    runtime: Runtime, question: str, strategy: Strategy, collection: str = MONDRIA
+    runtime: Runtime, question: str, strategy: Strategy, collection: str = MONDRIA, top_k: int = rag.TOP_K
 ) -> list[ScoredChunk]:
     async with await open_connection(runtime) as connection:
-        retriever, keep_scores = build_retriever(runtime, connection, strategy, collection)
+        retriever, keep_scores = build_retriever(runtime, connection, strategy, collection, top_k)
         documents = await retriever.ainvoke(question)
-    return to_chunks(documents, rag.TOP_K, keep_scores)
+    return to_chunks(documents, top_k, keep_scores)
 
 
 async def answer_question(

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 
 import { EvaluationDetails } from "@/components/evaluation-details";
 import evaluationData from "@/data/evaluation.json";
-import { percent, type EvaluationFile, type Run } from "@/lib/evaluation";
-import { STRATEGIES, strategyLabel, strategyOrder } from "@/lib/strategies";
+import { isNative, percent, type EvaluationFile, type RagasScores, type Run } from "@/lib/evaluation";
+import { STRATEGIES, pipelineLabel, strategyLabel, strategyOrder } from "@/lib/strategies";
 
 export const metadata: Metadata = {
   title: "Évaluation — Mondria RAG",
@@ -94,7 +94,14 @@ function ScoreStrip({ run, threshold }: { run: Run; threshold: number }) {
 }
 
 export default function EvaluationPage() {
-  const runs = Object.values(evaluation.runs);
+  const allRuns = Object.values(evaluation.runs);
+  const runs = allRuns.filter(isNative);
+  const langchainRuns = allRuns
+    .filter((r) => !isNative(r) && r.embedding_model === PRODUCTION_MODEL)
+    .sort((a, b) => strategyOrder(a.strategy) - strategyOrder(b.strategy));
+  const ragasRuns = allRuns
+    .filter((r) => r.ragas && r.embedding_model === PRODUCTION_MODEL)
+    .sort((a, b) => strategyOrder(a.strategy) - strategyOrder(b.strategy) || (isNative(a) ? -1 : 1));
   const defaultStrategy = evaluation.default_strategy;
   const strategyRuns = runs
     .filter((r) => r.embedding_model === PRODUCTION_MODEL)
@@ -185,6 +192,72 @@ export default function EvaluationPage() {
                 </tr>
               ))}
             </Table>
+          </section>
+        )}
+
+        {langchainRuns.length > 0 && (
+          <section className="flex flex-col gap-6">
+            <div>
+              <Eyebrow>Comparaison</Eyebrow>
+              <h2 className="mt-2 font-display text-3xl font-bold tracking-tight">Code maison et LangChain</h2>
+              <p className="mt-3 max-w-3xl text-ink/75">
+                Mêmes stratégies, même base, mêmes modèles et mêmes prompts : seule l’orchestration change. La
+                version LangChain utilise EnsembleRetriever (hybride), MultiQueryRetriever et LLMListwiseRerank. Son
+                multi-requêtes fait l’union des résultats sans fusion RRF.
+              </p>
+            </div>
+            <Table head={["Stratégie", "Hit rate@1", "MRR", "Latence médiane", "Erreur de citation"]}>
+              {langchainRuns.map((lc) => {
+                const native = strategyRuns.find((r) => r.strategy === lc.strategy);
+                const pair = (value: (r: Run) => string) => `${native ? value(native) : "—"} · ${value(lc)}`;
+                return (
+                  <tr key={lc.strategy} className="border-t border-ink/10">
+                    <td className={CELL}>{strategyLabel(lc.strategy)}</td>
+                    <td className={CELL}>{pair((r) => percent(r.retrieval.hit_rate_at_1))}</td>
+                    <td className={CELL}>{pair((r) => r.retrieval.mrr.toFixed(3))}</td>
+                    <td className={CELL}>{pair((r) => `${r.retrieval.latency_ms_median} ms`)}</td>
+                    <td className={CELL}>{pair((r) => (r.answers ? percent(r.answers.citation_error_rate) : "—"))}</td>
+                  </tr>
+                );
+              })}
+            </Table>
+            <p className="text-sm text-ink/60">Chaque cellule : code maison · LangChain.</p>
+          </section>
+        )}
+
+        {ragasRuns.length > 0 && (
+          <section className="flex flex-col gap-6">
+            <div>
+              <Eyebrow>RAGAS</Eyebrow>
+              <h2 className="mt-2 font-display text-3xl font-bold tracking-tight">Qualité des réponses</h2>
+              <p className="mt-3 max-w-3xl text-ink/75">
+                Mesures de la bibliothèque RAGAS sur les {ragasRuns[0]?.ragas?.questions_scored} questions qui ont une
+                réponse. <strong>Fidélité</strong> : part des affirmations de la réponse appuyées par les sections
+                fournies. <strong>Pertinence</strong> : la réponse répond-elle à la question ?{" "}
+                <strong>Précision et rappel du contexte</strong> : part des sections envoyées qui étaient attendues,
+                et part des sections attendues qui ont été envoyées.
+              </p>
+            </div>
+            <Table head={["Stratégie", "Implémentation", "Fidélité", "Pertinence", "Précision contexte", "Rappel contexte"]}>
+              {ragasRuns.map((r) => {
+                const means = r.ragas?.means as RagasScores;
+                return (
+                  <tr key={`${r.pipeline ?? "native"}-${r.strategy}`} className="border-t border-ink/10">
+                    <td className={CELL}>{strategyLabel(r.strategy)}</td>
+                    <td className={CELL}>{pipelineLabel(r.pipeline ?? "native")}</td>
+                    <td className={CELL}>{means.faithfulness.toFixed(2)}</td>
+                    <td className={CELL}>{means.answer_relevancy.toFixed(2)}</td>
+                    <td className={CELL}>{means.context_precision.toFixed(2)}</td>
+                    <td className={CELL}>{means.context_recall.toFixed(2)}</td>
+                  </tr>
+                );
+              })}
+            </Table>
+            <p className="max-w-3xl text-sm text-ink/60">
+              Fidélité et pertinence sont notées par un LLM ({ragasRuns[0]?.ragas?.judge_model}), le même qui écrit
+              les réponses : à lire comme une comparaison entre configurations, pas comme une vérité absolue. Avec 23
+              questions, quelques points d’écart relèvent du bruit.
+            </p>
           </section>
         )}
 
