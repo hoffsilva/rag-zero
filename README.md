@@ -64,6 +64,35 @@ The [/documents page](https://rag-zero.vercel.app/documents) runs the same pipel
 | `multi_query` | the LLM rewrites the question in French three ways; vector search for each; RRF | 1 chat call |
 | `rerank` (default) | 10 vector candidates reordered by the LLM (structured output) | 1 chat call |
 
+## Native and LangChain
+
+The same RAG runs in two implementations, chosen per request (`pipeline` in `POST /api/ask`, and a menu on the page): **native**, this project's own code, and **langchain**, the same strategies built from LangChain components (`api/app/services/langchain_rag.py`). Both read the same `chunks` table, use the same models and prompts, and return the same response, so the evaluation compares only the orchestration.
+
+| strategy | LangChain component |
+|---|---|
+| `vector` | a custom `BaseRetriever` over the pgvector search |
+| `hybrid` | `EnsembleRetriever` (vector + keyword, weighted Reciprocal Rank Fusion) |
+| `multi_query` | `MultiQueryRetriever` (LLM query variants, unique union of their results) |
+| `rerank` | `ContextualCompressionRetriever` + `LLMListwiseRerank` over 10 vector candidates |
+
+Generation is an LCEL chain (`ChatPromptTemplate | ChatOpenAI.with_structured_output(..., strict=True)`). `keyword` would be the same SQL, and LangChain's MMR needs numpy and a vector store, so the LangChain pipeline doesn't offer them (422).
+
+Choices worth explaining:
+- **No `langchain-postgres`.** It needs numpy and pgvector < 0.4 and creates its own tables. Thin retrievers over the existing repository keep one schema and one index for both pipelines.
+- **Async end to end.** `LLMListwiseRerank` only implements the sync path (the async one runs it in a thread), so `AsyncListwiseRerank` awaits the same chain. The LangChain models share the `OpenAIClient` connection pool, and their sync HTTP client refuses every request, so a blocking call can't slip in. Sharing the pool also means the tests' fake OpenAI transport covers LangChain.
+- **Same prompts.** LangChain's default multi-query prompt keeps the question's language; it gets the native instruction (variants in the documents' language), otherwise Portuguese questions would search French documents in Portuguese.
+
+Results (`text-embedding-3-small`, 23 answerable questions, k=5):
+
+| strategy | hit rate@1 native · LangChain | MRR native · LangChain | citation error native · LangChain |
+|---|---|---|---|
+| `vector` | 74% · 74% | 0.837 · 0.837 | 3% · 7% |
+| `hybrid` | 57% · 61% | 0.667 · 0.696 | 17% · 17% |
+| `multi_query` | 78% · 70% | 0.870 · 0.800 | 3% · 10% |
+| `rerank` | 100% · 100% | 1.000 · 1.000 | 3% · 0% |
+
+`vector` and `rerank` match: the same search and the same kind of LLM ranking. `multi_query` loses with LangChain because `MultiQueryRetriever` returns the union of its queries' results in order, without a fusion step, so the first variant's results fill the top of the list; the native version fuses the rankings with RRF. Citation errors differ by at most two questions out of 29, which is within the noise of generation at this sample size.
+
 ## Project structure
 
 ```
@@ -83,13 +112,16 @@ api/
     logging.py            Request ID middleware and one JSON log line per request
     mcp.py                MCP tools: search_mondria_docs, ask_mondria
     routers/              HTTP layer: ask, documents, health
-    services/             rag, retrieval (six strategies), indexing, ingestion (uploads)
+    services/             rag, retrieval (six strategies), langchain_rag, indexing, ingestion (uploads)
     repositories/         SQL: connection and schema, chunks, uploads
     clients/openai.py     Embeddings and chat over httpx, as an async context manager
+    clients/langchain.py  LangChain chat and embedding models sharing that connection pool
   eval/questions.json     Evaluation set (29 questions)
-  eval/run_eval.py        Hit rate, MRR, threshold FP/FN, citation compliance
+  eval/run_eval.py        Hit rate, MRR, threshold FP/FN, citation compliance (both pipelines)
+  eval/run_ragas.py       RAGAS faithfulness and answer relevancy, context precision/recall
   tests/                  pytest suite (unit, API, golden, Postgres integration)
   ruff.toml, mypy.ini     Lint, format and strict type checking
+  requirements-eval.txt   App + RAGAS, for the evaluation only (not deployed)
 web/
   app/page.tsx            Demo page
   app/evaluation/page.tsx Evaluation report page
@@ -176,7 +208,7 @@ Then ask Claude Code something like "Where are Mondria's offices?" and it calls 
 cd api && python eval/run_eval.py --strategy all --answers --save
 ```
 
-`--strategy all` runs every retrieval strategy. `--save` writes the results to `web/data/evaluation.json` (one entry per embedding model and strategy), which the [/evaluation page](https://rag-zero.vercel.app/evaluation) renders: metrics, model comparison, the threshold chart and every question with what was retrieved and answered. It is a committed snapshot, so visitors don't trigger API calls.
+`--strategy all` runs every retrieval strategy and `--pipeline langchain` (or `all`) the LangChain implementation. `--save` writes the results to `web/data/evaluation.json` (one entry per embedding model and strategy), which the [/evaluation page](https://rag-zero.vercel.app/evaluation) renders: metrics, model comparison, the threshold chart and every question with what was retrieved and answered. It is a committed snapshot, so visitors don't trigger API calls.
 
 **Retrieval strategies** (`text-embedding-3-small`, k = 5):
 
@@ -220,23 +252,55 @@ The larger model didn't help, so the app stays on the small one.
 
 A threshold only catches off-topic questions (weather 0.31, poutine 0.13). On-topic questions without an answer in the docs (CEO 0.53, headcount 0.53) score like answerable ones (lowest 0.40), so no threshold separates them: the LLM's "answer only from the context" rule is what refuses them. A threshold around 0.35 would still be useful as a cheap filter that skips the chat call for off-topic questions, with no false negatives on this set.
 
+### RAGAS: the answers themselves
+
+The metrics above check ranks and citations with no LLM in the loop. `api/eval/run_ragas.py` adds [RAGAS](https://docs.ragas.io/) scores for the saved answers of every run, on the 23 answerable questions (for the other 6, the right answer is a refusal, which the citation check already measures):
+
+```bash
+cd api && pip install -r requirements-eval.txt && python eval/run_ragas.py
+```
+
+- **Faithfulness**: share of the answer's claims supported by the sections it was generated from. An LLM judge splits the answer into statements and checks each one against the context. This is the hallucination measure.
+- **Answer relevancy**: does the answer address the question? The judge writes questions the answer would fit, and the score is their mean cosine similarity to the real question.
+- **Context precision / recall by ID**: share of the sections sent to the LLM that were expected, and share of the expected sections that were sent. No LLM; RAGAS 0.4 deprecates its ID-based metrics, so the script does the same set arithmetic.
+
+| strategy | pipeline | faithfulness | answer relevancy | context precision | context recall |
+|---|---|---|---|---|---|
+| `vector` | native | 0.96 | 0.84 | 0.29 | 0.98 |
+| `keyword` | native | 0.93 | 0.64 | 0.27 | 0.67 |
+| `hybrid` | native | 0.86 | 0.78 | 0.23 | 0.83 |
+| `mmr` | native | 0.92 | 0.81 | 0.27 | 0.91 |
+| `multi_query` | native | 0.97 | 0.84 | 0.28 | 0.96 |
+| `rerank` | native | 0.91 | 0.85 | 0.29 | 0.98 |
+| `vector` | LangChain | 0.96 | 0.86 | 0.29 | 0.98 |
+| `hybrid` | LangChain | 0.93 | 0.72 | 0.23 | 0.83 |
+| `multi_query` | LangChain | 0.94 | 0.84 | 0.27 | 0.91 |
+| `rerank` | LangChain | 0.95 | 0.86 | 0.29 | 0.98 |
+
+How to read it:
+- **Answer relevancy follows retrieval.** When the right section isn't retrieved (`keyword` misses a third of the questions), the model correctly says the information isn't available, and an answer that doesn't answer scores low on relevancy. Context recall shows the same thing from the retrieval side.
+- **Context precision is capped by design**: 4 sections go to the LLM and most questions expect one, so 0.25 to 0.30 is near the ceiling. It would only rise by sending fewer sections.
+- **Faithfulness stays above 0.85 everywhere**: the "answer only from the context" prompt holds.
+- **Limits.** The judge is the same model that writes the answers (`gpt-4.1-mini`), so it may be lenient with its own style; read the scores as a comparison between configurations. With 23 questions, a few points of difference are noise, and the native and LangChain runs were generated on different days.
+
 ## Tests and checks
 
 ```bash
 cd api
 ruff check . && ruff format --check .
 mypy
-pytest                                                    # 69 tests, database tests skipped
-TEST_DATABASE_URL=postgresql://postgres:<password>@localhost:5433/postgres pytest   # all 79
+pytest                                                    # 78 tests, database tests skipped
+TEST_DATABASE_URL=postgresql://postgres:<password>@localhost:5433/postgres pytest   # all 88
 ```
 
-79 tests, under a second. They never call OpenAI: the OpenAI client is built with an `httpx` transport that fails the test on any real request, and `.env.local` isn't loaded during the run.
+88 tests, under two seconds. They never call OpenAI: the OpenAI client is built with an `httpx` transport that fails the test on any real request, and `.env.local` isn't loaded during the run.
 
 - **Golden end-to-end** (Postgres): the real app with a deterministic fake OpenAI, fixing the output of all six strategies, `/api/ask` and the upload. They were written before the refactoring into layers and passed unchanged after every step.
 - **Chunking**: frontmatter parsing, section boundaries (the trailing `Documents associés` and `Sources` don't leak into the last section), and the real knowledge base (21 unique sections, each with its document and source URLs).
 - **RAG pipeline**: with retrieval and the chat call replaced by fakes, the model receives the question and every retrieved section, and cited sections are detected with or without brackets. With the database faked, the first request indexes an empty table, reuses existing chunks, and re-indexes when `OPENAI_EMBEDDING_MODEL` changes (the Vercel redeploy path) under the advisory lock; a failed indexing rolls back, closes the connection and leaves the instance not ready. Citations are matched as whole IDs, and a model refusal becomes the answer.
 - **OpenAI client**: `text-embedding-3` models are asked for 1536 dimensions (the column size), `ada-002` isn't, vectors come back in input order; answers are capped with `max_completion_tokens`, refusals and truncated answers raise instead of returning unparseable content, and output with NUL characters is retried.
 - **API** (FastAPI `TestClient`): health check, 422 with the invalid fields for empty or too long questions, a generic 500 that leaks nothing and carries the same request ID in the body, header and log, request IDs reused only when valid, the route template in the access log, the OpenAPI schema, two apps running independently, and the remote MCP endpoint (`tools/list`, `tools/call`, a failing tool).
+- **LangChain pipeline**: the real LangChain components against a fake OpenAI and fake repository: cosine scores kept for `vector`, RRF order for `hybrid` checked by hand, multi-query variants requested in the documents' language and deduplicated, listwise rerank order, `max_completion_tokens` and the strict schema sent, and 422 for `keyword`/`mmr`.
 - **Settings**: missing and empty variables, defaults, and environment over `.env.local`.
 - **Evaluation metrics**: hit rate, MRR, document hit rate and the false positive / negative counts on hand-made data.
 - **Uploads**: extraction of Markdown, text and a PDF generated in the test (plus scanned, broken, too large, wrong type and non-UTF-8 files), chunking by headings and by size with overlap, the upload endpoint with fakes (private collection, NUL characters removed), collection isolation and expiry on Postgres, and 404/422 for unknown or malformed collections.

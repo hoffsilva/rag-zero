@@ -41,6 +41,13 @@ class OpenAIClient:
         self._http: httpx.AsyncClient | None = None
 
     @property
+    def http(self) -> httpx.AsyncClient:
+        """The open connection pool, shared with the LangChain models (see clients/langchain.py)."""
+        if self._http is None:
+            raise RuntimeError("Open the client with `async with OpenAIClient(...)` first")
+        return self._http
+
+    @property
     def embedding_model(self) -> str:
         return self._settings.openai_embedding_model
 

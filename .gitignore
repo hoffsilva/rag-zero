@@ -8,3 +8,6 @@ __pycache__/
 # Secrets (keep the example)
 .env*
 !.env.example
+
+# Personal study workspace (teach skill)
+study/

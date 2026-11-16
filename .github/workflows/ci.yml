@@ -38,8 +38,10 @@ jobs:
           cache: pip
           cache-dependency-path: |
             api/requirements.txt
+            api/requirements-eval.txt
             api/requirements-dev.txt
-      - run: pip install -r requirements.txt -r requirements-dev.txt
+      # requirements-eval.txt (app + RAGAS) so mypy also checks eval/run_ragas.py.
+      - run: pip install -r requirements-eval.txt -r requirements-dev.txt
       - run: ruff check .
       - run: ruff format --check .
       - run: mypy

@@ -47,6 +47,12 @@ class UnsupportedFileTypeError(AppError):
     default_message = "Formats acceptés : .md, .txt et .pdf."
 
 
+class StrategyNotAvailableError(AppError):
+    status_code = 422
+    code = "strategy_not_available"
+    default_message = "This strategy is not available in the LangChain pipeline."
+
+
 def error_body(code: str, message: str, request_id: str | None, **extra: Any) -> dict[str, Any]:
     return {"detail": message, "error": {"code": code, "message": message, "request_id": request_id, **extra}}
 

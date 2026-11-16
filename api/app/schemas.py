@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.domain import MONDRIA, Strategy, UploadKind
+from app.domain import MONDRIA, Pipeline, Strategy, UploadKind
 
 COLLECTION_PATTERN = r"^(mondria|upload-[0-9a-f]{32})$"
 
@@ -13,6 +13,7 @@ class AskRequest(BaseModel):
             "examples": [
                 {"question": "Où sont les bureaux de Mondria ?"},
                 {"question": "Quanto custa o suporte de TI?", "strategy": "hybrid"},
+                {"question": "Where are Mondria's offices?", "strategy": "rerank", "pipeline": "langchain"},
             ]
         }
     )
@@ -20,6 +21,13 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=300, description="Any language.")
     strategy: Strategy | None = Field(
         default=None, description="Retrieval strategy; the server default (rerank) when omitted."
+    )
+    pipeline: Pipeline = Field(
+        default="native",
+        description=(
+            '"native" (this project\'s code) or "langchain" (same strategies with LangChain components; '
+            "vector, hybrid, multi_query and rerank only)."
+        ),
     )
     collection: str = Field(
         default=MONDRIA,
@@ -53,6 +61,7 @@ class AskResponse(BaseModel):
                 {
                     "answer": "Les bureaux de Mondria sont à Sherbrooke et à Boisbriand [MON-01-04].",
                     "strategy": "rerank",
+                    "pipeline": "native",
                     "sources": [
                         {
                             "id": "MON-01-04",
@@ -76,6 +85,7 @@ class AskResponse(BaseModel):
     answer: str
     sources: list[Source]
     strategy: Strategy
+    pipeline: Pipeline
 
 
 class UploadResponse(BaseModel):
@@ -134,7 +144,7 @@ def error_responses(*status_codes: int) -> dict[int | str, dict[str, object]]:
         404: "Document not found or expired",
         413: "File larger than 1 MB",
         415: "Unsupported file type",
-        422: "Invalid request",
+        422: "Invalid request, or a strategy the chosen pipeline doesn't offer",
         429: "Too many requests (Vercel Firewall rate limit; not this JSON format)",
         500: "Internal server error",
     }

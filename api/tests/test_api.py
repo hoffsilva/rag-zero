@@ -6,11 +6,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.services import rag
+from app.services import langchain_rag, rag
 
 ANSWER: dict[str, Any] = {
     "answer": "Deux bureaux [MON-01-04].",
     "strategy": "vector",
+    "pipeline": "native",
     "sources": [
         {
             "id": "MON-01-04",
@@ -66,6 +67,34 @@ def test_ask_returns_the_answer_and_sources(client, pipeline):
     assert response.status_code == 200
     assert response.json() == ANSWER
     assert pipeline == [{"question": "Où sont les bureaux ?", "strategy": "hybrid", "collection": "mondria"}]
+
+
+def test_the_langchain_pipeline_is_chosen_per_request(client, pipeline, monkeypatch):
+    langchain_calls: list[str | None] = []
+
+    async def fake_langchain(runtime, question, strategy=None, collection="mondria"):
+        langchain_calls.append(strategy)
+        return {**ANSWER, "pipeline": "langchain"}
+
+    monkeypatch.setattr(langchain_rag, "answer_question", fake_langchain)
+    response = client.post(
+        "/api/ask", json={"question": "Bonjour", "strategy": "hybrid", "pipeline": "langchain"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["pipeline"] == "langchain"
+    assert langchain_calls == ["hybrid"]
+    assert pipeline == []  # the native pipeline wasn't called
+
+
+@pytest.mark.parametrize("strategy", ["keyword", "mmr"])
+def test_langchain_rejects_the_strategies_it_does_not_offer(client, strategy):
+    response = client.post(
+        "/api/ask", json={"question": "Bonjour", "strategy": strategy, "pipeline": "langchain"}
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "strategy_not_available"
 
 
 def test_ask_rejects_an_unknown_strategy(client, pipeline):

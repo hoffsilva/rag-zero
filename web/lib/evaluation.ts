@@ -1,4 +1,4 @@
-// Shape of web/data/evaluation.json, written by api/eval/run_eval.py --save.
+// Shape of web/data/evaluation.json, written by api/eval/run_eval.py --save and api/eval/run_ragas.py.
 export interface Retrieved {
   id: string;
   score: number;
@@ -23,8 +23,17 @@ export interface ThresholdRow {
   error_rate: number;
 }
 
+export interface RagasScores {
+  faithfulness: number;
+  answer_relevancy: number;
+  context_precision: number;
+  context_recall: number;
+}
+
 export interface Run {
   embedding_model: string;
+  // Runs saved before the LangChain pipeline existed have no pipeline: they are native.
+  pipeline?: string;
   strategy: string;
   date: string;
   k: number;
@@ -51,11 +60,19 @@ export interface Run {
     unanswerable_answered: number;
   } | null;
   questions: QuestionResult[];
+  ragas?: {
+    judge_model: string;
+    questions_scored: number;
+    means: RagasScores;
+    questions: (RagasScores & { question: string })[];
+  };
 }
 
 export interface EvaluationFile {
-  runs: Record<string, Run>; // key: "<embedding model>|<strategy>"
+  runs: Record<string, Run>; // key: "<embedding model>|<strategy>", or "<embedding model>|langchain|<strategy>"
   default_strategy: string;
 }
 
 export const percent = (value: number) => `${Math.round(value * 100)} %`;
+
+export const isNative = (run: Run) => (run.pipeline ?? "native") === "native";

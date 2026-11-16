@@ -16,11 +16,14 @@ Answers (--answers, one chat call per question) — citation compliance, not fac
   expected section passes, and so does an invented answer without citations.
   Generation uses the app's own retrieval (rag.TOP_K sections), saved as answer_sources.
 
---save writes the results into web/data/evaluation.json under the embedding model's name,
-which the /evaluation page of the web app renders.
+--pipeline picks the implementation: native (this project's code), langchain (the same strategies
+with LangChain components; vector, hybrid, multi_query and rerank only) or all.
+
+--save writes the results into web/data/evaluation.json, one entry per embedding model, pipeline
+and strategy, which the /evaluation page of the web app renders.
 
 Run from api/ (uses .env.local and the configured database and embedding model):
-    python eval/run_eval.py [--k 5] [--strategy NAME|all] [--answers] [--save]
+    python eval/run_eval.py [--k 5] [--strategy NAME|all] [--pipeline NAME|all] [--answers] [--save]
 """
 
 import argparse
@@ -35,9 +38,10 @@ from typing import Any, TypedDict
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.domain import STRATEGIES, Strategy
+from app.domain import LANGCHAIN_STRATEGIES, PIPELINES, STRATEGIES, Pipeline, ScoredChunk, Strategy
+from app.repositories.database import Connection
 from app.runtime import Runtime, open_runtime
-from app.services import rag, retrieval
+from app.services import langchain_rag, rag, retrieval
 from app.services.indexing import open_connection
 
 QUESTIONS_FILE = Path(__file__).parent / "questions.json"
@@ -75,8 +79,16 @@ def first_hit_rank(expected: list[str], ids: list[str]) -> int | None:
     return next((rank for rank, section in enumerate(ids, start=1) if section in expected), None)
 
 
+async def retrieve_one(
+    runtime: Runtime, connection: Connection, question: str, k: int, strategy: Strategy, pipeline: Pipeline
+) -> list[ScoredChunk]:
+    if pipeline == "langchain":
+        return await langchain_rag.retrieve(runtime, question, strategy, top_k=k)
+    return await retrieval.run(strategy, runtime.openai, connection, question, k)
+
+
 async def retrieve_all(
-    runtime: Runtime, cases: list[Case], k: int, strategy: Strategy
+    runtime: Runtime, cases: list[Case], k: int, strategy: Strategy, pipeline: Pipeline = "native"
 ) -> list[QuestionResult]:
     """Runs the app's own retrieval for each question and times it (embedding, database and,
     for multi_query/rerank, the extra LLM call)."""
@@ -84,7 +96,7 @@ async def retrieve_all(
     async with await open_connection(runtime) as connection:
         for case in cases:
             started = time.perf_counter()
-            sources = await retrieval.run(strategy, runtime.openai, connection, case["question"], k)
+            sources = await retrieve_one(runtime, connection, case["question"], k, strategy, pipeline)
             latency_ms = (time.perf_counter() - started) * 1000
             ids = [source["id"] for source in sources]
             results.append(
@@ -145,10 +157,11 @@ def threshold_metrics(results: list[QuestionResult]) -> dict[str, Any]:
 
 
 async def evaluate_answers(
-    runtime: Runtime, results: list[QuestionResult], strategy: Strategy
+    runtime: Runtime, results: list[QuestionResult], strategy: Strategy, pipeline: Pipeline = "native"
 ) -> dict[str, Any]:
+    implementation = langchain_rag if pipeline == "langchain" else rag
     for result in results:
-        answer = await rag.answer_question(runtime, result["question"], strategy)
+        answer = await implementation.answer_question(runtime, result["question"], strategy)
         cited = [source["id"] for source in answer["sources"] if source["cited"]]
         result["answer"] = answer["answer"]
         result["answer_sources"] = [source["id"] for source in answer["sources"]]
@@ -169,8 +182,8 @@ async def evaluate_answers(
 def print_report(report: dict[str, Any]) -> None:
     retrieval, threshold, k = report["retrieval"], report["threshold"], report["k"]
     print(
-        f"# Evaluation — {report['embedding_model']}, strategy {report['strategy']}, "
-        f"{len(report['questions'])} questions"
+        f"# Evaluation — {report['embedding_model']}, {report['pipeline']} pipeline, "
+        f"strategy {report['strategy']}, {len(report['questions'])} questions"
     )
     print(f"\n## Retrieval ({retrieval['answerable']} answerable questions, k={k})")
     print(f"hit rate@1:          {retrieval['hit_rate_at_1']:.0%}")
@@ -223,11 +236,13 @@ def print_report(report: dict[str, Any]) -> None:
 
 
 def run_key(report: dict[str, Any]) -> str:
-    return f"{report['embedding_model']}|{report['strategy']}"
+    # Native runs keep the keys they had before the LangChain pipeline existed.
+    pipeline = "" if report["pipeline"] == "native" else f"{report['pipeline']}|"
+    return f"{report['embedding_model']}|{pipeline}{report['strategy']}"
 
 
 def save_report(report: dict[str, Any], default_strategy: Strategy) -> None:
-    """Keeps one entry per (embedding model, strategy), so the page can compare them."""
+    """Keeps one entry per (embedding model, pipeline, strategy), so the page can compare them."""
     data = json.loads(RESULTS_FILE.read_text(encoding="utf-8")) if RESULTS_FILE.exists() else {"runs": {}}
     data["runs"][run_key(report)] = report
     data["default_strategy"] = default_strategy
@@ -237,18 +252,24 @@ def save_report(report: dict[str, Any], default_strategy: Strategy) -> None:
 
 
 async def evaluate(
-    runtime: Runtime, cases: list[Case], k: int, strategy: Strategy, answers: bool
+    runtime: Runtime,
+    cases: list[Case],
+    k: int,
+    strategy: Strategy,
+    answers: bool,
+    pipeline: Pipeline = "native",
 ) -> dict[str, Any]:
-    results = await retrieve_all(runtime, cases, k, strategy)
+    results = await retrieve_all(runtime, cases, k, strategy, pipeline)
     return {
         "embedding_model": runtime.openai.embedding_model,
+        "pipeline": pipeline,
         "strategy": strategy,
         "date": date.today().isoformat(),
         "k": k,
         "retrieval": retrieval_metrics(results),
         # Only the vector strategy has a similarity score a threshold can be put on.
         "threshold": threshold_metrics(results) if strategy == "vector" else None,
-        "answers": await evaluate_answers(runtime, results, strategy) if answers else None,
+        "answers": await evaluate_answers(runtime, results, strategy, pipeline) if answers else None,
         "questions": results,
     }
 
@@ -264,6 +285,9 @@ async def main() -> None:
         default=None,
         help="retrieval strategy to evaluate (default: RETRIEVAL_STRATEGY), or all of them",
     )
+    parser.add_argument(
+        "--pipeline", choices=[*PIPELINES, "all"], default="native", help="implementation to evaluate"
+    )
     parser.add_argument("--answers", action="store_true", help="also evaluate the generated answers")
     parser.add_argument("--save", action="store_true", help=f"write the results to {RESULTS_FILE.name}")
     args = parser.parse_args()
@@ -274,11 +298,15 @@ async def main() -> None:
         strategies: tuple[Strategy, ...] = (
             STRATEGIES if args.strategy == "all" else (args.strategy or default,)
         )
-        for strategy in strategies:
-            report = await evaluate(runtime, cases, args.k, strategy, args.answers)
-            print_report(report)
-            if args.save:
-                save_report(report, default)
+        pipelines: tuple[Pipeline, ...] = PIPELINES if args.pipeline == "all" else (args.pipeline,)
+        for pipeline in pipelines:
+            for strategy in strategies:
+                if pipeline == "langchain" and strategy not in LANGCHAIN_STRATEGIES:
+                    continue
+                report = await evaluate(runtime, cases, args.k, strategy, args.answers, pipeline)
+                print_report(report)
+                if args.save:
+                    save_report(report, default)
 
 
 if __name__ == "__main__":
