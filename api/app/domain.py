@@ -8,6 +8,11 @@ UPLOAD_TTL_HOURS = 24
 Strategy = Literal["vector", "keyword", "hybrid", "mmr", "multi_query", "rerank"]
 STRATEGIES: tuple[Strategy, ...] = get_args(Strategy)
 
+# "native" is this project's own code; "langchain" runs the same strategies with LangChain components.
+Pipeline = Literal["native", "langchain"]
+PIPELINES: tuple[Pipeline, ...] = get_args(Pipeline)
+LANGCHAIN_STRATEGIES: tuple[Strategy, ...] = ("vector", "hybrid", "multi_query", "rerank")
+
 UploadKind = Literal["markdown", "text", "pdf"]
 
 
@@ -34,6 +39,7 @@ class Answer(TypedDict):
     answer: str
     sources: list[ScoredChunk]
     strategy: Strategy
+    pipeline: Pipeline
 
 
 class Upload(TypedDict):

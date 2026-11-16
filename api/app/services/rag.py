@@ -53,6 +53,22 @@ ANSWER_SCHEMA: JsonObject = {
 }
 
 
+def mark_cited(answer: str, sources: list[ScoredChunk]) -> None:
+    """Marks the sources the answer actually cites, as opposed to the ones only retrieved.
+    IDs are compared as whole tokens; the model sometimes drops the brackets."""
+    cited_ids = set(CITED_ID_PATTERN.findall(answer))
+    for source in sources:
+        source["cited"] = source["id"] in cited_ids
+
+
+def system_prompt_for(collection: str) -> str:
+    return SYSTEM_PROMPT if collection == MONDRIA else UPLOAD_SYSTEM_PROMPT
+
+
+def subject_for(collection: str) -> str:
+    return retrieval.MONDRIA_SUBJECT if collection == MONDRIA else UPLOAD_SUBJECT
+
+
 def build_context(sources: list[ScoredChunk]) -> str:
     """Augmented step: the retrieved chunks become the context of the prompt."""
     return "Context:\n" + "\n\n".join(f"[{chunk['id']}] {chunk['text']}" for chunk in sources)
@@ -68,7 +84,7 @@ async def retrieve(
     """Retrieval step with the given strategy (RETRIEVAL_STRATEGY by default; see retrieval.py),
     in the Mondria base or in an uploaded document's collection. The question is embedded with
     the same model as the chunks."""
-    subject = retrieval.MONDRIA_SUBJECT if collection == MONDRIA else UPLOAD_SUBJECT
+    subject = subject_for(collection)
     async with await open_connection(runtime) as connection:
         return await retrieval.run(
             strategy or runtime.settings.retrieval_strategy,
@@ -86,7 +102,7 @@ async def answer_question(
 ) -> Answer:
     strategy = strategy or runtime.settings.retrieval_strategy
     sources = await retrieve(runtime, question, strategy=strategy, collection=collection)
-    system_prompt = SYSTEM_PROMPT if collection == MONDRIA else UPLOAD_SYSTEM_PROMPT
+    system_prompt = system_prompt_for(collection)
 
     # Generation. With a French context, the model tends to answer in French whatever the
     # question's language. Making it name the question's language first, in a structured
@@ -102,14 +118,9 @@ async def answer_question(
         )
     except ChatRefusal as refusal:
         # A refusal is an answer, not a server error: show it, with nothing cited.
-        return Answer(answer=str(refusal), sources=sources, strategy=strategy)
+        return Answer(answer=str(refusal), sources=sources, strategy=strategy, pipeline="native")
     reply: dict[str, Any] = json.loads(raw)
     answer = str(reply["answer"])
 
-    # Sources the answer actually cites, as opposed to the ones that were only retrieved.
-    # IDs are compared as whole tokens; the model sometimes drops the brackets.
-    cited_ids = set(CITED_ID_PATTERN.findall(answer))
-    for source in sources:
-        source["cited"] = source["id"] in cited_ids
-
-    return Answer(answer=answer, sources=sources, strategy=strategy)
+    mark_cited(answer, sources)
+    return Answer(answer=answer, sources=sources, strategy=strategy, pipeline="native")
